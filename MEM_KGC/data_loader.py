@@ -1,0 +1,103 @@
+from helper import *
+from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
+
+class TrainDataset(Dataset):
+    """
+    Training Dataset class.
+
+    Parameters
+    ----------
+    triples:    The triples used for training the model
+    params:     Parameters for the experiments
+
+    Returns
+    -------
+    A training Dataset class instance used by DataLoader
+    """
+
+    def __init__(self, triples, params):
+        self.triples = triples
+        self.p = params
+        self.entities = np.arange(self.p.num_ent, dtype=np.int32)
+
+    def __len__(self):
+        return len(self.triples)
+
+    def __getitem__(self, idx):
+        ele = self.triples[idx]
+        triple, sub_samp = torch.LongTensor(ele['triple']), np.float32(ele['sub_samp'])
+        # trp_label = self.get_label(label)
+
+        trp_label = torch.LongTensor(ele['label'])
+        # print(trp_label)
+
+        text_ids, text_mask = torch.LongTensor(ele['text_ids']), torch.LongTensor(ele['text_mask'])
+
+
+        return triple, trp_label, text_ids, text_mask
+
+
+
+    @staticmethod
+    def collate_fn(data):
+        triple = torch.stack([_[0] for _ in data], dim=0)
+        trp_label = torch.stack([_[1] for _ in data], dim=0)
+        # triple: (batch-size) * 3(sub, rel, -1) trp_label (batch-size) * num entity
+        # return triple, trp_label
+        text_ids = pad_sequence([_[2] for _ in data], batch_first=True, padding_value=0)
+        text_mask = pad_sequence([_[3] for _ in data], batch_first=True, padding_value=0)
+
+        return triple, trp_label.squeeze(-1), text_ids, text_mask
+
+
+
+
+    def get_label(self, label):
+        y = np.zeros([self.p.num_ent], dtype=np.float32)
+        for e2 in label: y[e2] = 1.0
+        return torch.FloatTensor(y)
+
+
+
+class TestDataset(Dataset):
+    """
+    Evaluation Dataset class.
+
+    Parameters
+    ----------
+    triples:    The triples used for evaluating the model
+    params:     Parameters for the experiments
+
+    Returns
+    -------
+    An evaluation Dataset class instance used by DataLoader for model evaluation
+    """
+
+    def __init__(self, triples, params):
+        self.triples = triples
+        self.p = params
+
+    def __len__(self):
+        return len(self.triples)
+
+    def __getitem__(self, idx):
+        ele = self.triples[idx]
+        triple, label = torch.LongTensor(ele['triple']), np.int32(ele['label'])
+        label = self.get_label(label)
+
+        text_ids, text_mask = torch.LongTensor(ele['text_ids']), torch.LongTensor(ele['text_mask'])
+        return triple, label, text_ids, text_mask
+
+    @staticmethod
+    def collate_fn(data):
+        triple = torch.stack([_[0] for _ in data], dim=0)
+        label = torch.stack([_[1] for _ in data], dim=0)
+        text_ids = pad_sequence([_[2] for _ in data], batch_first=True, padding_value=0)
+        text_mask = pad_sequence([_[3] for _ in data], batch_first=True, padding_value=0)
+        return triple, label, text_ids, text_mask
+
+    def get_label(self, label):
+        y = np.zeros([self.p.num_ent], dtype=np.float32)
+        for e2 in label: y[e2] = 1.0
+        return torch.FloatTensor(y)
