@@ -355,7 +355,16 @@ class DisenKGAT_ConvE(CapsuleBase):
         # mask_token_state = last_hidden_state[:, -2]
         # output = self.ent_classifier(mask_token_state)
 
-        mask_token_state = last_hidden_state[:, -2]
+        # mask_token_state = last_hidden_state[:, -2]
+
+        mask_token_state = []
+        for i in range(sub.size(0)):
+            pred_embed = last_hidden_state[i, pred_pos[i]]
+            # print(pred_pos[i])
+            mask_token_state.append(pred_embed)
+
+        mask_token_state = torch.cat(mask_token_state, dim=0)
+
         # output = self.ent_classifier(mask_token_state)
         output_tmp = self.ent_transform(mask_token_state)
 

@@ -30,12 +30,13 @@ class Runner(object):
                 rel_text = self.rel_names[rel]
             else:
                 rel_text = 'reversed: ' + self.rel_names[rel - self.p.num_rel]
-            rel_text += self.tok.mask_token
-            tokenized_text = self.tok(sub_text, text_pair=rel_text, max_length=self.p.text_len, truncation=True)
+            # rel_text += self.tok.mask_token
+            tokenized_text = self.tok(sub_text, text_pair=rel_text, max_length=self.p.text_len-1, truncation=True)
             source_ids = tokenized_text.input_ids  # encoded tokens
             source_mask = tokenized_text.attention_mask  # the position of padding is zero, others are one
-            # print(self.tok.decode(source_ids))
-            # print(source_ids)
+            # manually add [MASK] token, its id is 103
+            source_ids.insert(-1, 103)
+            source_mask.insert(-1, 1)
             return source_ids, source_mask
         def read_file2(data_path, filename):
             items = []
@@ -97,7 +98,7 @@ class Runner(object):
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
         self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
 
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples3')
+        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_1012')
 
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
@@ -105,29 +106,25 @@ class Runner(object):
             self.triples = ddict(list)
             for sub, rel, obj in tqdm(self.data['train']):
                 text_ids, text_mask = construct_input_text(sub, rel)
-                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask})
-                # self.triples['train'].append({'triple': (sub, rel, -1), 'label': self.sr2o[(sub, rel)], 'sub_samp': 1})
+                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
                 rel_inv = rel + self.p.num_rel
                 text_ids, text_mask = construct_input_text(obj, rel_inv)
                 self.triples['train'].append(
-                {'triple': (obj, rel_inv, -1), 'label': [sub], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask})
+                {'triple': (obj, rel_inv, -1), 'label': [sub], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
 
             for split in ['test', 'valid']:
                 for sub, rel, obj in tqdm(self.data[split]):
                     text_ids, text_mask = construct_input_text(sub, rel)
                     self.triples['{}_{}'.format(split, 'tail')].append(
-                        {'triple': (sub, rel, obj), 'label': self.sr2o_all[(sub, rel)], 'text_ids': text_ids, 'text_mask': text_mask})
-                    # self.triples['{}_{}'.format(split, 'tail')].append(
-                    #     {'triple': (sub, rel, obj), 'label': self.sr2o_all[(sub, rel)],})
+                        {'triple': (sub, rel, obj), 'label': self.sr2o_all[(sub, rel)], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+
 
                     rel_inv = rel + self.p.num_rel
 
                     text_ids, text_mask = construct_input_text(obj, rel_inv)
                     self.triples['{}_{}'.format(split, 'head')].append(
                         {'triple': (obj, rel_inv, sub), 'label': self.sr2o_all[(obj, rel_inv)], 'text_ids': text_ids,
-                         'text_mask': text_mask})
-                    # self.triples['{}_{}'.format(split, 'head')].append(
-                    #     {'triple': (obj, rel_inv, sub), 'label': self.sr2o_all[(obj, rel_inv)]})
+                         'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
 
 
                 print('{}_{} num is {}'.format(split, 'tail', len(self.triples['{}_{}'.format(split, 'tail')])))
@@ -181,11 +178,7 @@ class Runner(object):
     def __init__(self, params):
 
         self.p = params
-        # self.logger = get_logger(self.p.name, self.p.log_dir, self.p.config_dir)
 
-        # print(vars(self.p))
-        # pprint(vars(self.p))
-        # torch.cuda.device_count()
         if self.p.gpu != '-1' and torch.cuda.is_available():
             self.device = torch.device('cuda')
             torch.cuda.set_rng_state(torch.cuda.get_rng_state())
@@ -207,9 +200,6 @@ class Runner(object):
         else:
             print('Training from Scratch ...')
             self.path_template = os.path.join('./checkpoints', self.p.name)
-
-
-
 
 
 
@@ -248,34 +238,34 @@ class Runner(object):
 
     def read_batch(self, batch, split):
         if split == 'train':
-            triple, label, text_ids, text_mask = [_.to(self.device) for _ in batch]
-            return triple[:, 0], triple[:, 1], triple[:, 2], label, text_ids, text_mask
+            triple, label, text_ids, text_mask, pred_pos = [_.to(self.device) for _ in batch]
+            return triple[:, 0], triple[:, 1], triple[:, 2], label, text_ids, text_mask, pred_pos
         else:
-            triple, label, text_ids, text_mask = [_.to(self.device) for _ in batch]
-            return triple[:, 0], triple[:, 1], triple[:, 2], label, text_ids, text_mask
+            triple, label, text_ids, text_mask, pred_pos = [_.to(self.device) for _ in batch]
+            return triple[:, 0], triple[:, 1], triple[:, 2], label, text_ids, text_mask, pred_pos
 
 
     # def save_model(self, save_path):
 
 
-    def load_model(self, load_path):
-
-        state = torch.load(load_path)
-        state_dict = state['state_dict']
-        # self.best_val = state['best_val']
-        # self.best_val_mrr = self.best_val['mrr']
-        # self.best_val_mrr['struc'] =
-        self.model.load_state_dict(state_dict)
-        self.optimizer.load_state_dict(state['optimizer'])
-
     # def load_model(self, load_path):
     #
     #     state = torch.load(load_path)
     #     state_dict = state['state_dict']
-    #     self.best_val_mrr[self.p.load_type] = state['best_val_mrr']
-    #
+    #     # self.best_val = state['best_val']
+    #     # self.best_val_mrr = self.best_val['mrr']
+    #     # self.best_val_mrr['struc'] =
     #     self.model.load_state_dict(state_dict)
     #     self.optimizer.load_state_dict(state['optimizer'])
+
+    def load_model(self, load_path):
+
+        state = torch.load(load_path)
+        state_dict = state['state_dict']
+        self.best_val_mrr[self.p.load_type] = state['best_val_mrr']
+
+        self.model.load_state_dict(state_dict)
+        self.optimizer.load_state_dict(state['optimizer'])
 
     def evaluate(self, split, epoch):
 
@@ -305,8 +295,8 @@ class Runner(object):
             train_iter = iter(self.data_iter['{}_{}'.format(split, mode.split('_')[0])])
 
             for step, batch in enumerate(train_iter):
-                sub, rel, obj, label, text_ids, text_mask = self.read_batch(batch, split)
-                pred, output, _ = self.model.forward(sub, rel, text_ids, text_mask, split)
+                sub, rel, obj, label, text_ids, text_mask, pred_pos = self.read_batch(batch, split)
+                pred, output, _ = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, split)
                 b_range = torch.arange(pred.size()[0], device=self.device)
                 target_output = output[b_range, obj]
                 target_pred = pred[b_range, obj]
@@ -374,9 +364,9 @@ class Runner(object):
             self.optimizer.zero_grad()
             # if self.p.mi_train and self.p.mi_method.startswith('club'):
             self.model.mi_Discs.eval()
-            sub, rel, obj, label, text_ids, text_mask = self.read_batch(batch, 'train')
+            sub, rel, obj, label, text_ids, text_mask, pred_pos = self.read_batch(batch, 'train')
 
-            pred, output, corr = self.model.forward(sub, rel, text_ids, text_mask, 'train')
+            pred, output, corr = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, 'train')
 
             loss = self.model.loss_fn(pred, label)
             loss_mask_pred = self.model.loss_fn(output, label)
@@ -400,7 +390,7 @@ class Runner(object):
                 self.optimizer_mi.step()
                 lld_losses.append(lld_loss.item())
 
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 # if self.p.mi_train:
                 print(
                     '[E:{}| {}]: Total Loss:{:.5}, Train ConvE Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
