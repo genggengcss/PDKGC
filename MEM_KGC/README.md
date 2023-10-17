@@ -4,6 +4,8 @@
 
 **frozen with learning rate, i.e., model_lr: 5e-4 (can tune)**
 
+#### Running commands
+**for training**
 ```
 python run.py -epoch 2000 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base -fine_tune
 python run.py -epoch 2000 -name LM_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base
