@@ -113,7 +113,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Parser For Arguments',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # FB15k-237
-    parser.add_argument('-data', dest='dataset', default='WN18RR', help='Dataset to use, default: FB15k-237')
+    parser.add_argument('-data', dest='dataset', default='FB15k-237', help='Dataset to use, default: FB15k-237')
 
     parser.add_argument('-gpu', type=int, default=6, help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
 
@@ -127,6 +127,8 @@ if __name__ == '__main__':
 
     if args.gpu != '-1' and torch.cuda.is_available():
         device = torch.device('cuda')
+        if args.gpu < torch.cuda.device_count():
+            torch.cuda.set_device(args.gpu)
         torch.cuda.set_rng_state(torch.cuda.get_rng_state())
         torch.backends.cudnn.deterministic = True
     else:
