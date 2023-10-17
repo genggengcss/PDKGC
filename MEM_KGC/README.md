@@ -1,20 +1,20 @@
-#### Fine-tune & Frozen LM
+## Fine-tune & Frozen LM, BERT-base & BERT-large
 
-** fine-tune with default learning rates, i.e., bert_lr: 1e-5, model_lr: 5e-4; running around 50 epochs **
+**fine-tune with default learning rates, i.e., bert_lr: 1e-5, model_lr: 5e-4; running around 50 epochs**
 
-** frozen with learning rate, i.e., model_lr: 5e-4 **
+**frozen with learning rate, i.e., model_lr: 5e-4 (can tune)**
 
 ```
 python run.py -epoch 2000 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base -fine_tune
-python run.py -epoch 2000 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base
+python run.py -epoch 2000 -name LM_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base
 ```
 
-** for continue training **
+**for continue training, specify load_epoch and load_path**
 ```
 python run.py -epoch 2000 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base -fine_tune -load_epoch 48 -load_path LM_WN18RR_12_10_2023_15:55:43
 ```
 
-** for testing **
+**for testing, set params: test and load_path**
 ```
 python run.py -epoch 2000 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_base -fine_tune -test -load_path LM_WN18RR_12_10_2023_15:55:43
 ```
