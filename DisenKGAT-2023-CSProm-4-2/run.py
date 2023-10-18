@@ -466,6 +466,14 @@ class Runner(object):
                 train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
                 # if ((epoch + 1) % 10 == 0):
                 combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
+                if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
+                    kill_cnt = epoch - self.best_epoch + 1
+                    if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
+                        self.p.gamma -= 5
+                        print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
+                    if kill_cnt > self.p.early_stop:
+                        print("Early Stopping!!")
+                        break
                 self.save_model(combine_val_results, 'combine', epoch)
                 self.save_model(struc_val_results, 'struc', epoch)
                 self.save_model(lm_val_results, 'text', epoch)
