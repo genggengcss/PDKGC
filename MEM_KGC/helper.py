@@ -155,7 +155,6 @@ class LabelSmoothingCrossEntropy(nn.Module):
         # (1-e)* H(q,p) + e*H(u,p)
         return (1 - self.e) * nll + self.e * (loss / c)
 
-
 def get_loss_fn(configs):
     if configs.lbl_smooth == 0:
         return torch.nn.CrossEntropyLoss()

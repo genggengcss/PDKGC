@@ -26,29 +26,25 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx):
         ele = self.triples[idx]
-        triple, sub_samp = torch.LongTensor(ele['triple']), np.float32(ele['sub_samp'])
-        # trp_label = self.get_label(label)
-
-        trp_label = torch.LongTensor(ele['label'])
-        # print(trp_label)
+        triple, label = torch.LongTensor(ele['triple']), torch.LongTensor(ele['label'])
 
         text_ids, text_mask = torch.LongTensor(ele['text_ids']), torch.LongTensor(ele['text_mask'])
+        pred_pos = torch.LongTensor([ele['pred_pos']])
 
-
-        return triple, trp_label, text_ids, text_mask
+        return triple, label, text_ids, text_mask, pred_pos
 
 
 
     @staticmethod
     def collate_fn(data):
         triple = torch.stack([_[0] for _ in data], dim=0)
-        trp_label = torch.stack([_[1] for _ in data], dim=0)
+        label = torch.stack([_[1] for _ in data], dim=0)
         # triple: (batch-size) * 3(sub, rel, -1) trp_label (batch-size) * num entity
         # return triple, trp_label
         text_ids = pad_sequence([_[2] for _ in data], batch_first=True, padding_value=0)
         text_mask = pad_sequence([_[3] for _ in data], batch_first=True, padding_value=0)
-
-        return triple, trp_label.squeeze(-1), text_ids, text_mask
+        pred_pos = torch.stack([_[4] for _ in data], dim=0)
+        return triple, label.squeeze(-1), text_ids, text_mask, pred_pos
 
 
 
@@ -87,7 +83,8 @@ class TestDataset(Dataset):
         label = self.get_label(label)
 
         text_ids, text_mask = torch.LongTensor(ele['text_ids']), torch.LongTensor(ele['text_mask'])
-        return triple, label, text_ids, text_mask
+        pred_pos = torch.LongTensor([ele['pred_pos']])
+        return triple, label, text_ids, text_mask, pred_pos
 
     @staticmethod
     def collate_fn(data):
@@ -95,7 +92,9 @@ class TestDataset(Dataset):
         label = torch.stack([_[1] for _ in data], dim=0)
         text_ids = pad_sequence([_[2] for _ in data], batch_first=True, padding_value=0)
         text_mask = pad_sequence([_[3] for _ in data], batch_first=True, padding_value=0)
-        return triple, label, text_ids, text_mask
+        pred_pos = torch.stack([_[4] for _ in data], dim=0)
+
+        return triple, label, text_ids, text_mask, pred_pos
 
     def get_label(self, label):
         y = np.zeros([self.p.num_ent], dtype=np.float32)
