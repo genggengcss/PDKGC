@@ -272,7 +272,7 @@ class DisenKGAT_ConvE(CapsuleBase):
     def lld_best(self, sub, rel):
         return self.lld_bst(sub, rel, self.hidden_drop)
 
-    def forward(self, sub, rel, text_ids, text_mask, mode='train'):
+    def forward(self, sub, rel, text_ids, text_mask, pred_pos, mode='train'):
         if mode == 'train':
             sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.forward_base(sub, rel, self.hidden_drop, mode)
             # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.embed_dim)
@@ -372,3 +372,242 @@ class DisenKGAT_ConvE(CapsuleBase):
 
         return logist, output, corr
 
+class DisenKGAT_TransE(CapsuleBase):
+    def __init__(self, edge_index, edge_type, params=None):
+        super(self.__class__, self).__init__(edge_index, edge_type, params.num_rel, params)
+        self.drop = torch.nn.Dropout(self.p.hid_drop)
+        self.rel_weight = self.conv_ls[-1].rel_weight
+        gamma_init = torch.FloatTensor([self.p.init_gamma])
+        if not self.p.fix_gamma:
+            self.register_parameter('gamma', Parameter(gamma_init))
+
+        self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
+        self.plm_configs.prompt_length = self.p.prompt_length
+        self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
+        self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
+        self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
+        # self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
+        if self.p.prompt_length > 0:
+            for p in self.plm.parameters():
+                p.requires_grad = False
+
+        self.loss_fn = get_loss_fn(params)
+
+        ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
+        self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
+        self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
+    
+    def lld_best(self, sub, rel):
+        return self.lld_bst(sub, rel, self.drop)
+
+    def forward(self, sub, rel, text_ids, text_mask, pred_pos, neg_ents=None, mode='train'):
+        if mode == 'train':
+            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.forward_base(sub, rel, self.drop, mode)
+            # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        else:
+            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.test_base(sub, rel, self.drop, mode)
+
+        all_ent = all_ent.view(-1, self.p.num_factors, self.p.embed_dim)
+
+        sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.embed_dim)
+        rel_emb_exd = torch.unsqueeze(rel_emb_single, 1)
+        embed_input = torch.cat([sub_emb, rel_emb_exd], dim=1)
+
+        # ## plug LLMs
+        prompt = self.prompter(embed_input)
+        prompt_attention_mask = torch.ones(sub_emb.size(0), self.p.prompt_length * (self.p.num_factors + 1)).type_as(text_mask)
+        text_mask = torch.cat((prompt_attention_mask, text_mask), dim=1)
+        output = self.plm(input_ids=text_ids, attention_mask=text_mask, layerwise_prompt=prompt)
+        # # last_hidden_state -- .shape: (batch_size, seq_len, model_dim)
+        last_hidden_state = output.last_hidden_state
+
+
+        ent_rel_state = last_hidden_state[:, :self.p.prompt_length * (self.p.num_factors + 1)]
+        plm_embeds = torch.chunk(ent_rel_state, chunks=(self.p.num_factors + 1), dim=1)
+        plm_sub_embeds, plm_rel_embed = plm_embeds[:self.p.num_factors], plm_embeds[-1]
+
+        plm_sub_embed = torch.stack(plm_sub_embeds, dim=1)
+        plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), self.p.num_factors, -1))
+        plm_rel_embed = self.llm_fc(plm_rel_embed.reshape(rel_emb.size(0), -1)).repeat(1, self.p.num_factors)
+
+        # for i in range(self.p.num_factors):
+        #     plm_sub_embed_i = self.llm_fc(plm_sub_embeds[i].reshape(rel_emb.size(0), -1))
+
+        # print(plm_sub_embed.shape)
+        # print(plm_rel_embed.shape)
+        plm_rel_embed = plm_rel_embed.view(-1, self.p.num_factors, self.p.embed_dim)
+        attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [plm_sub_embed, plm_rel_embed]))
+        attention = nn.Softmax(dim=-1)(attention)
+
+        # rel_weight = torch.index_select(self.rel_weight, 0, rel) 
+        # rel_emb = rel_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        # if self.p.score_method == 'dot_rel':
+        #     sub_rel_emb = sub_emb * rel_weight
+        #     rel_emb = rel_emb
+        #     attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [sub_rel_emb, rel_emb])) # B K
+        # elif self.p.score_method == 'dot_sub':
+        #     sub_rel_emb = sub_emb
+        #     attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [sub_rel_emb, rel_emb])) # B K
+        # elif self.p.score_method == 'cat_rel':
+        #     sub_rel_emb = sub_emb * rel_weight
+        #     attention = self.leakyrelu(self.fc_a(torch.cat([sub_rel_emb, rel_emb], dim=2)).squeeze()) # B K
+        # elif self.p.score_method == 'cat_sub':
+        #     sub_rel_emb = sub_emb 
+        #     attention = self.leakyrelu(self.fc_a(torch.cat([sub_rel_emb, rel_emb], dim=2)).squeeze()) # B K
+        # elif self.p.score_method == 'learn':
+        #     att_rel = torch.index_select(self.fc_att, 0, rel)
+        #     attention = self.leakyrelu(att_rel) # [B K]
+        # attention = nn.Softmax(dim=-1)(attention)
+        # calculate the score 
+        obj_emb = plm_sub_embed + plm_rel_embed
+        if self.p.gamma_method == 'ada':
+            x = self.gamma - torch.norm(obj_emb.unsqueeze(1) - all_ent, p=1, dim=3).transpose(1, 2)
+        elif self.p.gamma_method == 'norm':
+            x2 = torch.sum(obj_emb * obj_emb, dim=-1)
+            y2 = torch.sum(all_ent * all_ent, dim=-1)
+            xy = torch.einsum('bkf,nkf->bkn', [obj_emb, all_ent])
+            x = self.gamma - (x2.unsqueeze(2) + y2.t() -  2 * xy)
+
+        elif self.p.gamma_method == 'fix':
+            x = self.p.gamma - torch.norm(obj_emb.unsqueeze(1) - all_ent, p=1, dim=3).transpose(1, 2)
+        # start to attention on prediction
+        # before
+        logist = torch.einsum('bk,bkn->bn', [attention, x])
+        # if self.p.score_order == 'before':
+        #     x = torch.einsum('bk,bkn->bn', [attention, x])
+        #     pred = torch.sigmoid(x)
+        # elif self.p.score_order == 'after':
+        #     x = torch.sigmoid(x)
+        #     pred = torch.einsum('bk,bkn->bn', [attention, x])
+        #     pred = torch.clamp(pred, min=0., max=1.0)
+
+        mask_token_state = []
+        for i in range(sub.size(0)):
+            pred_embed = last_hidden_state[i, pred_pos[i]]
+            # print(pred_pos[i])
+            mask_token_state.append(pred_embed)
+
+        mask_token_state = torch.cat(mask_token_state, dim=0)
+
+        # output = self.ent_classifier(mask_token_state)
+        output_tmp = self.ent_transform(mask_token_state)
+
+        output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
+
+        return logist, output, corr
+    
+class DisenKGAT_DistMult(CapsuleBase):
+    def __init__(self, edge_index, edge_type, params=None):
+        super(self.__class__, self).__init__(edge_index, edge_type, params.num_rel, params)
+        self.drop = torch.nn.Dropout(self.p.hid_drop)
+        self.rel_weight = self.conv_ls[-1].rel_weight
+
+        self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
+        self.plm_configs.prompt_length = self.p.prompt_length
+        self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
+        self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
+        self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
+        # self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
+        if self.p.prompt_length > 0:
+            for p in self.plm.parameters():
+                p.requires_grad = False
+
+        self.loss_fn = get_loss_fn(params)
+
+        ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
+        self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
+        self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
+
+    def lld_best(self, sub, rel):
+        return self.lld_bst(sub, rel, self.drop)
+
+    def forward(self, sub, rel, text_ids, text_mask, pred_pos, neg_ents=None, mode='train'):
+        if mode == 'train':
+            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.forward_base(sub, rel, self.drop, mode)
+            # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        else:
+            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.test_base(sub, rel, self.drop, mode)
+
+        all_ent = all_ent.view(-1, self.p.num_factors, self.p.embed_dim)
+
+        sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.embed_dim)
+        rel_emb_exd = torch.unsqueeze(rel_emb_single, 1)
+        embed_input = torch.cat([sub_emb, rel_emb_exd], dim=1)
+
+        # ## plug LLMs
+        prompt = self.prompter(embed_input)
+        prompt_attention_mask = torch.ones(sub_emb.size(0), self.p.prompt_length * (self.p.num_factors + 1)).type_as(text_mask)
+        text_mask = torch.cat((prompt_attention_mask, text_mask), dim=1)
+        output = self.plm(input_ids=text_ids, attention_mask=text_mask, layerwise_prompt=prompt)
+        # # last_hidden_state -- .shape: (batch_size, seq_len, model_dim)
+        last_hidden_state = output.last_hidden_state
+
+        ent_rel_state = last_hidden_state[:, :self.p.prompt_length * (self.p.num_factors + 1)]
+        plm_embeds = torch.chunk(ent_rel_state, chunks=(self.p.num_factors + 1), dim=1)
+        plm_sub_embeds, plm_rel_embed = plm_embeds[:self.p.num_factors], plm_embeds[-1]
+
+        plm_sub_embed = torch.stack(plm_sub_embeds, dim=1)
+        plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), self.p.num_factors, -1))
+        plm_rel_embed = self.llm_fc(plm_rel_embed.reshape(rel_emb.size(0), -1)).repeat(1, self.p.num_factors)
+
+        # for i in range(self.p.num_factors):
+        #     plm_sub_embed_i = self.llm_fc(plm_sub_embeds[i].reshape(rel_emb.size(0), -1))
+
+        # print(plm_sub_embed.shape)
+        # print(plm_rel_embed.shape)
+        plm_rel_embed = plm_rel_embed.view(-1, self.p.num_factors, self.p.embed_dim)
+        attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [plm_sub_embed, plm_rel_embed]))
+        attention = nn.Softmax(dim=-1)(attention)
+
+        # rel_weight = torch.index_select(self.rel_weight, 0, rel) 
+        # rel_emb = rel_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.gcn_dim)
+        # if self.p.score_method == 'dot_rel':
+        #     sub_rel_emb = sub_emb * rel_weight
+        #     rel_emb = rel_emb
+        #     attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [sub_rel_emb, rel_emb])) # B K
+        # elif self.p.score_method == 'dot_sub':
+        #     sub_rel_emb = sub_emb
+        #     attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [sub_rel_emb, rel_emb])) # B K
+        # elif self.p.score_method == 'cat_rel':
+        #     sub_rel_emb = sub_emb * rel_weight
+        #     attention = self.leakyrelu(self.fc_a(torch.cat([sub_rel_emb, rel_emb], dim=2)).squeeze()) # B K
+        # elif self.p.score_method == 'cat_sub':
+        #     sub_rel_emb = sub_emb 
+        #     attention = self.leakyrelu(self.fc_a(torch.cat([sub_rel_emb, rel_emb], dim=2)).squeeze()) # B K
+        # elif self.p.score_method == 'learn':
+        #     att_rel = torch.index_select(self.fc_att, 0, rel)
+        #     attention = self.leakyrelu(att_rel) # [B K]
+        # attention = nn.Softmax(dim=-1)(attention)
+        # calculate the score 
+        obj_emb = plm_sub_embed * plm_rel_embed
+        x = torch.einsum('bkf,nkf->bkn', [obj_emb, all_ent])
+        x += self.bias.expand_as(x)
+        # start to attention on prediction
+        # before
+        logist = torch.einsum('bk,bkn->bn', [attention, x])
+        # if self.p.score_order == 'before':
+        #     x = torch.einsum('bk,bkn->bn', [attention, x])
+        #     pred = torch.sigmoid(x)
+        # elif self.p.score_order == 'after':
+        #     x = torch.sigmoid(x)
+        #     pred = torch.einsum('bk,bkn->bn', [attention, x])
+        #     pred = torch.clamp(pred, min=0., max=1.0)
+
+        mask_token_state = []
+        for i in range(sub.size(0)):
+            pred_embed = last_hidden_state[i, pred_pos[i]]
+            # print(pred_pos[i])
+            mask_token_state.append(pred_embed)
+
+        mask_token_state = torch.cat(mask_token_state, dim=0)
+
+        # output = self.ent_classifier(mask_token_state)
+        output_tmp = self.ent_transform(mask_token_state)
+
+        output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
+
+        return logist, output, corr
