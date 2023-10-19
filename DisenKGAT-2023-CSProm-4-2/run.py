@@ -5,6 +5,7 @@ import transformers
 from transformers import AutoConfig, BertTokenizer
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
+import traceback
 
 
 def frozen_params(module: nn.Module):
@@ -187,11 +188,13 @@ class Runner(object):
             self.device = torch.device('cpu')
 
         self.load_data()
-        self.model = self.add_model()
+        self.model = self.add_model(self.p.model, self.p.score_func)
         self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
 
         self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
         self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
+
+        os.makedirs('./checkpints', exist_ok=True)
 
         if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
             self.path_template = os.path.join('./checkpoints', self.p.load_path)
@@ -203,14 +206,34 @@ class Runner(object):
 
 
 
-    def add_model(self):
+    def add_model(self, model, score_func):
+        """
+        Creates the computational graph
 
+        Parameters
+        ----------
+        model_name:     Contains the model name to be created
+
+        Returns
+        -------
+        Creates the computational graph for model and initializes it
+
+        """
         # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
         # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
         # state = torch.load(model_save_path, map_location=self.device)
         # pretrained_dict = state['state_dict']
+        model_name = '{}_{}'.format(model, score_func)
 
-        model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+        if model_name.lower() == 'disenkgat_transe':
+            model = DisenKGAT_TransE(self.edge_index, self.edge_type, params=self.p)
+        elif model_name.lower() == 'disenkgat_distmult':
+            model = DisenKGAT_DistMult(self.edge_index, self.edge_type, params=self.p)
+        elif model_name.lower() == 'disenkgat_conve':
+            model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+        else:
+            raise NotImplementedError
+
         # model_dict = model.state_dict()
         # pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
         # #
@@ -393,9 +416,8 @@ class Runner(object):
             if step % 1000 == 0:
                 # if self.p.mi_train:
                 print(
-                    '[E:{}| {}]: Total Loss:{:.5}, Train ConvE Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
-                        epoch, step, np.mean(losses),
-                        np.mean(losses_train), np.mean(losses_train_mask_pred), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                    '[E:{}| {}]: Total Loss:{:.5}, Train {} Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
+                        epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_train), np.mean(losses_train_mask_pred), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
                 # else:
                 #     print(
                 #         '[E:{}| {}]: Train Loss:{:.5},  Val MRR:{:.5}\t{}'.format(epoch, step, np.mean(losses),
@@ -444,6 +466,14 @@ class Runner(object):
                 train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
                 # if ((epoch + 1) % 10 == 0):
                 combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
+                if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
+                    kill_cnt = epoch - self.best_epoch + 1
+                    if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
+                        self.p.gamma -= 5
+                        print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
+                    if kill_cnt > self.p.early_stop:
+                        print("Early Stopping!!")
+                        break
                 self.save_model(combine_val_results, 'combine', epoch)
                 self.save_model(struc_val_results, 'struc', epoch)
                 self.save_model(lm_val_results, 'text', epoch)
@@ -475,6 +505,8 @@ if __name__ == '__main__':
 
     parser.add_argument('-name', default='testrun', help='Set run name for saving/restoring models')
     parser.add_argument('-data', dest='dataset', default='FB15k-237', help='Dataset to use, default: FB15k-237')
+    parser.add_argument('-model', dest='model', default='disenkgat', help='Model Name')
+    parser.add_argument('-score_func', dest='score_func', default='conve', help='Score Function for Link prediction')
     parser.add_argument('-opn', dest='opn', default='cross', help='Composition Operation to be used in RAGAT')
     # opn is new hyperparameter
     parser.add_argument('-batch', dest='batch_size', default=2048, type=int, help='Batch size')
