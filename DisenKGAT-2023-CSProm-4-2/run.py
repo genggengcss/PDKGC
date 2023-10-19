@@ -99,7 +99,8 @@ class Runner(object):
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
         self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
 
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_1012')
+        # for quickly load data
+        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_bert')
 
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
@@ -107,11 +108,10 @@ class Runner(object):
             self.triples = ddict(list)
             for sub, rel, obj in tqdm(self.data['train']):
                 text_ids, text_mask = construct_input_text(sub, rel)
-                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
                 rel_inv = rel + self.p.num_rel
                 text_ids, text_mask = construct_input_text(obj, rel_inv)
-                self.triples['train'].append(
-                {'triple': (obj, rel_inv, -1), 'label': [sub], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                self.triples['train'].append({'triple': (obj, rel_inv, -1), 'label': [sub], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
 
             for split in ['test', 'valid']:
                 for sub, rel, obj in tqdm(self.data[split]):
@@ -191,18 +191,7 @@ class Runner(object):
         self.model = self.add_model(self.p.model, self.p.score_func)
         self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
 
-        self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
-        self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
 
-        os.makedirs('./checkpints', exist_ok=True)
-
-        if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
-            self.path_template = os.path.join('./checkpoints', self.p.load_path)
-            self.load_model(self.path_template)
-            print('Successfully Loaded previous model')
-        else:
-            print('Training from Scratch ...')
-            self.path_template = os.path.join('./checkpoints', self.p.name)
 
 
 
@@ -219,10 +208,7 @@ class Runner(object):
         Creates the computational graph for model and initializes it
 
         """
-        # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
-        # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
-        # state = torch.load(model_save_path, map_location=self.device)
-        # pretrained_dict = state['state_dict']
+
         model_name = '{}_{}'.format(model, score_func)
 
         if model_name.lower() == 'disenkgat_transe':
@@ -231,16 +217,19 @@ class Runner(object):
             model = DisenKGAT_DistMult(self.edge_index, self.edge_type, params=self.p)
         elif model_name.lower() == 'disenkgat_conve':
             model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+
+            # if we want to load pretrained DisenKGAT_ConvE
+            # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
+            # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
+            # state = torch.load(model_save_path, map_location=self.device)
+            # pretrained_dict = state['state_dict']
+            # model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+            # model_dict = model.state_dict()
+            # pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
+            # model_dict.update(pretrained_dict)
+            # model.load_state_dict(model_dict)
         else:
             raise NotImplementedError
-
-        # model_dict = model.state_dict()
-        # pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
-        # #
-        # model_dict.update(pretrained_dict)
-        # #
-        # model.load_state_dict(model_dict)
-        # #
 
         model.to(self.device)
         return model
@@ -268,9 +257,6 @@ class Runner(object):
             return triple[:, 0], triple[:, 1], triple[:, 2], label, text_ids, text_mask, pred_pos
 
 
-    # def save_model(self, save_path):
-
-
     # def load_model(self, load_path):
     #
     #     state = torch.load(load_path)
@@ -286,7 +272,7 @@ class Runner(object):
         state = torch.load(load_path)
         state_dict = state['state_dict']
         self.best_val_mrr[self.p.load_type] = state['best_val_mrr']
-
+        self.best_epoch[self.p.load_type] = self.p.load_epoch
         self.model.load_state_dict(state_dict)
         self.optimizer.load_state_dict(state['optimizer'])
 
@@ -376,8 +362,8 @@ class Runner(object):
 
         self.model.train()
         losses = []
-        losses_train = []
-        losses_train_mask_pred = []
+        losses_struc = []
+        losses_lm = []
         corr_losses = []
 
         lld_losses = []
@@ -391,13 +377,17 @@ class Runner(object):
 
             pred, output, corr = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, 'train')
 
-            loss = self.model.loss_fn(pred, label)
-            loss_mask_pred = self.model.loss_fn(output, label)
+            loss_struc = self.model.loss_fn(pred, label)
+            loss_lm = self.model.loss_fn(output, label)
             # if self.p.mi_train:
-            losses_train.append(loss.item())
-            losses_train_mask_pred.append(loss_mask_pred.item())
-            # loss = loss + self.p.alpha * corr
-            loss = loss + loss_mask_pred + self.p.alpha * corr
+            losses_struc.append(loss_struc.item())
+            losses_lm.append(loss_lm.item())
+
+            # weighted sum:
+            # loss_weighted_sum = self.model.loss_weight(loss_struc, loss_lm)
+            # loss = loss_weighted_sum + self.p.alpha * corr
+            # simple sum
+            loss = loss_struc + loss_lm + self.p.alpha * corr
             corr_losses.append(corr.item())
 
             loss.backward()
@@ -417,23 +407,14 @@ class Runner(object):
                 # if self.p.mi_train:
                 print(
                     '[E:{}| {}]: Total Loss:{:.5}, Train {} Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
-                        epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_train), np.mean(losses_train_mask_pred), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
-                # else:
-                #     print(
-                #         '[E:{}| {}]: Train Loss:{:.5},  Val MRR:{:.5}\t{}'.format(epoch, step, np.mean(losses),
-                #                                                                   self.best_val_mrr,
-                #                                                                   self.p.name))
-            # if step >= 10:
-            #     break
-        loss = np.mean(losses_train)
+                        epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_struc), np.mean(losses_lm), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+        loss = np.mean(losses_struc)
         # if self.p.mi_train:
         loss_corr = np.mean(corr_losses)
         if self.p.mi_method.startswith('club') and self.p.mi_epoch == 1:
             loss_lld = np.mean(lld_losses)
             return loss, loss_corr, loss_lld
         return loss, loss_corr, 0.
-        # print('[Epoch:{}]:  Training Loss:{:.4}\n'.format(epoch, loss))
-        # return loss, 0., 0.
 
     def save_model(self, results, type, epoch):
         if results['mrr'] > self.best_val_mrr[type]:
@@ -457,43 +438,54 @@ class Runner(object):
     def fit(self):
 
         try:
-            # if self.p.restore:
+            if not self.p.test:
+                self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
+                self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
 
+                os.makedirs('./checkpints', exist_ok=True)
 
-            # val_results = {}
-            # kill_cnt = 0
-            for epoch in range(self.p.load_epoch+1, self.p.max_epochs+1):
-                train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
-                # if ((epoch + 1) % 10 == 0):
-                combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
-                if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
-                    kill_cnt = epoch - self.best_epoch + 1
-                    if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
-                        self.p.gamma -= 5
-                        print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
-                    if kill_cnt > self.p.early_stop:
-                        print("Early Stopping!!")
-                        break
-                self.save_model(combine_val_results, 'combine', epoch)
-                self.save_model(struc_val_results, 'struc', epoch)
-                self.save_model(lm_val_results, 'text', epoch)
-                # if self.p.mi_train:
-                if self.p.mi_method == 'club_s' or self.p.mi_method == 'club_b':
-                    print(
-                        '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, \n \t Best Combine Valid MRR: {:.5} \n \t Best Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
-                            epoch, train_loss, corr_loss,
-                            lld_loss, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
+                    path = os.path.join('./checkpoints', self.p.load_path)
+                    self.save_path = path + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
+                    self.load_model(self.save_path)
+                    print('Successfully Loaded previous model')
                 else:
-                    print(
-                        '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, \n\t Best Combine Valid MRR: {:.5} \n \tBest Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
-                            epoch, train_loss, corr_loss,
-                            self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                    print('Training from Scratch ...')
+                    self.save_path = os.path.join('./checkpoints', self.p.name)
 
+                for epoch in range(self.p.load_epoch+1, self.p.max_epochs+1):
+                    train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
+                    # if ((epoch + 1) % 10 == 0):
+                    combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
+                    if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
+                        kill_cnt = epoch - self.best_epoch + 1
+                        if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
+                            self.p.gamma -= 5
+                            print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
+                        if kill_cnt > self.p.early_stop:
+                            print("Early Stopping!!")
+                            break
+                    self.save_model(combine_val_results, 'combine', epoch)
+                    self.save_model(struc_val_results, 'struc', epoch)
+                    self.save_model(lm_val_results, 'text', epoch)
+                    # if self.p.mi_train:
+                    if self.p.mi_method == 'club_s' or self.p.mi_method == 'club_b':
+                        print(
+                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, \n \t Best Combine Valid MRR: {:.5} \n \t Best Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, corr_loss,
+                                lld_loss, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                    else:
+                        print(
+                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, \n\t Best Combine Valid MRR: {:.5} \n \tBest Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, corr_loss,
+                                self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
 
-            # print('Loading best model, Evaluating on Test data')
-            # self.load_model(save_path)
-            # self.best_epoch = 0
-            # test_results = self.evaluate('test', self.best_epoch)
+            else:
+                path = os.path.join('./checkpoints', self.p.load_path)
+                self.save_path = path + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
+                print('Loading best model, Evaluating on Test data')
+                self.load_model(self.save_path)
+                self.evaluate('test', self.best_epoch)
         except Exception as e:
             print ("%s____%s\n"
                               "traceback.format_exc():____%s" % (Exception, e, traceback.format_exc()))
@@ -520,7 +512,6 @@ if __name__ == '__main__':
     parser.add_argument('-num_workers', type=int, default=10, help='Number of processes to construct batches')
     parser.add_argument('-seed', dest='seed', default=41504, type=int, help='Seed for randomization')
 
-    parser.add_argument('-restore', dest='restore', action='store_true', help='Restore from the previously saved model')
     parser.add_argument('-bias', dest='bias', action='store_true', help='Whether to use bias in the model')
 
     parser.add_argument('-embed_dim', dest='embed_dim', default=156, type=int,
@@ -563,7 +554,7 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', type=int, default=6, help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
 
     ## LLM params
-    parser.add_argument('-pretrained_model', type=str, default='/home/zjlab/gengyx/LMs/BERT_large', help='')
+    parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base'])
     parser.add_argument('-prompt_hidden_dim', default=-1, type=int, help='')
     parser.add_argument('-text_len', default=72, type=int, help='')
     parser.add_argument('-prompt_length', default=10, type=int, help='')
@@ -571,11 +562,16 @@ if __name__ == '__main__':
     parser.add_argument('-load_epoch', type=int, default=0)
     parser.add_argument('-load_type', type=str, default='')
     parser.add_argument('-load_path', type=str, default=None)
+    parser.add_argument('-test', dest='test', action='store_true', help='test the model')
     args = parser.parse_args()
 
-    if not args.restore:
+    if args.load_path == None and args.load_epoch == 0 and args.load_type == '':
         args.name = args.name + '_' + time.strftime('%d_%m_%Y') + '_' + time.strftime('%H:%M:%S')
-        # args.name = args.name
+
+    if args.pretrained_model == 'bert_large':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_large'
+    elif args.pretrained_model == 'bert_base':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_base'
 
     args.vocab_size = AutoConfig.from_pretrained(args.pretrained_model).vocab_size
     args.model_dim = AutoConfig.from_pretrained(args.pretrained_model).hidden_size

@@ -196,6 +196,27 @@ class CapsuleBase(BaseModel):
 
         return sub_emb, rel_emb, x, 0., rel_emb_single
 
+class AutomaticWeightedLoss(nn.Module):
+    """automatically weighted multi-task loss
+    Params：
+        num: int，the number of loss
+        x: multi-task loss
+    Examples：
+        loss1=1
+        loss2=2
+        awl = AutomaticWeightedLoss(2)
+        loss_sum = awl(loss1, loss2)
+    """
+    def __init__(self, num=2):
+        super(AutomaticWeightedLoss, self).__init__()
+        params = torch.ones(num, requires_grad=True)
+        self.params = torch.nn.Parameter(params)
+
+    def forward(self, *x):
+        loss_sum = 0
+        for i, loss in enumerate(x):
+            loss_sum += 0.5 / (self.params[i] ** 2) * loss + torch.log(1 + self.params[i] ** 2)
+        return loss_sum
 
 class Prompter(nn.Module):
     def __init__(self, plm_config, embed_dim, prompt_length):
@@ -261,7 +282,8 @@ class DisenKGAT_ConvE(CapsuleBase):
         ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
-
+        # if perform weighted sum of losses
+        # self.loss_weight = AutomaticWeightedLoss(2)
     def concat(self, e1_embed, rel_embed):
         e1_embed = e1_embed.view(-1, 1, self.embed_dim)
         rel_embed = rel_embed.view(-1, 1, self.embed_dim)
@@ -279,12 +301,7 @@ class DisenKGAT_ConvE(CapsuleBase):
         else:
             sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.test_base(sub, rel, self.hidden_drop, mode)
 
-        # # method(1)(2), start
-        # text_ids = text_ids.repeat(1, self.p.num_factors)
-        # text_mask = text_mask.repeat(1, self.p.num_factors)
-        # text_ids = text_ids.view(-1, self.p.text_len)
-        # text_mask = text_mask.view(-1, self.p.text_len)
-        #
+
         all_ent = all_ent.view(-1, self.p.num_factors, self.p.embed_dim)
 
         sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.embed_dim)
@@ -339,23 +356,8 @@ class DisenKGAT_ConvE(CapsuleBase):
 
         # before
         logist = torch.einsum('bk,bkn->bn', [attention, x])
-        # pred = torch.sigmoid(x)
-        #
-        # if self.p.score_order == 'before':
-        #     x = torch.einsum('bk,bkn->bn', [attention, x])
-        #     pred = torch.sigmoid(x)
-        # elif self.p.score_order == 'after':
-        #     x = torch.sigmoid(x)
-        #     pred = torch.einsum('bk,bkn->bn', [attention, x])
-        #     pred = torch.clamp(pred, min=0., max=1.0)
-        #
-        # # method(1)(2), end
-        # start to calculate the attention
 
-        # mask_token_state = last_hidden_state[:, -2]
-        # output = self.ent_classifier(mask_token_state)
 
-        # mask_token_state = last_hidden_state[:, -2]
 
         mask_token_state = []
         for i in range(sub.size(0)):

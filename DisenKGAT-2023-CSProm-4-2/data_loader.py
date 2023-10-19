@@ -26,11 +26,9 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx):
         ele = self.triples[idx]
-        triple, sub_samp = torch.LongTensor(ele['triple']), np.float32(ele['sub_samp'])
-        # trp_label = self.get_label(label)
+        triple = torch.LongTensor(ele['triple'])
 
         trp_label = torch.LongTensor(ele['label'])
-        # print(trp_label)
 
         text_ids, text_mask = torch.LongTensor(ele['text_ids']), torch.LongTensor(ele['text_mask'])
         pred_pos = torch.LongTensor([ele['pred_pos']])

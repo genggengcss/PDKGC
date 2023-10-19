@@ -99,7 +99,7 @@ class Runner(object):
 
 
         # for quickly load data
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_1012_lm2')
+        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_bert')
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
         else:
