@@ -191,8 +191,19 @@ class Runner(object):
         self.model = self.add_model(self.p.model, self.p.score_func)
         self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
 
+        self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
+        self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
 
+        os.makedirs('./checkpints', exist_ok=True)
 
+        if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
+            self.path_template = os.path.join('./checkpoints', self.p.load_path)
+            path = self.path_template + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
+            self.load_model(path)
+            print('Successfully Loaded previous model')
+        else:
+            print('Training from Scratch ...')
+            self.path_template = os.path.join('./checkpoints', self.p.name)
 
 
     def add_model(self, model, score_func):
@@ -439,19 +450,7 @@ class Runner(object):
 
         try:
             if not self.p.test:
-                self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
-                self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
 
-                os.makedirs('./checkpints', exist_ok=True)
-
-                if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
-                    path = os.path.join('./checkpoints', self.p.load_path)
-                    self.save_path = path + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
-                    self.load_model(self.save_path)
-                    print('Successfully Loaded previous model')
-                else:
-                    print('Training from Scratch ...')
-                    self.save_path = os.path.join('./checkpoints', self.p.name)
 
                 for epoch in range(self.p.load_epoch+1, self.p.max_epochs+1):
                     train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
@@ -481,11 +480,11 @@ class Runner(object):
                                 self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
 
             else:
-                path = os.path.join('./checkpoints', self.p.load_path)
-                self.save_path = path + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
+                # self.path_template = os.path.join('./checkpoints', self.p.load_path)
+                # path = self.path_template + '_type_{0}_epoch_{1}'.format(self.p.load_type, self.p.load_epoch)
                 print('Loading best model, Evaluating on Test data')
-                self.load_model(self.save_path)
-                self.evaluate('test', self.best_epoch)
+                # self.load_model(path)
+                self.evaluate('test', self.best_epoch[self.p.load_type])
         except Exception as e:
             print ("%s____%s\n"
                               "traceback.format_exc():____%s" % (Exception, e, traceback.format_exc()))
