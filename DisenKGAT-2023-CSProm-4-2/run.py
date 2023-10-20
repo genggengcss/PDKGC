@@ -2,7 +2,7 @@ from helper import *
 from data_loader import *
 from model import *
 import transformers
-from transformers import AutoConfig, BertTokenizer
+from transformers import AutoConfig, BertTokenizer, RobertaTokenizer
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
 import traceback
@@ -35,8 +35,8 @@ class Runner(object):
             tokenized_text = self.tok(sub_text, text_pair=rel_text, max_length=self.p.text_len-1, truncation=True)
             source_ids = tokenized_text.input_ids  # encoded tokens
             source_mask = tokenized_text.attention_mask  # the position of padding is zero, others are one
-            # manually add [MASK] token, its id is 103
-            source_ids.insert(-1, 103)
+            # manually add [MASK] token
+            source_ids.insert(-1, self.mask_token_id)
             source_mask.insert(-1, 1)
             return source_ids, source_mask
         def read_file2(data_path, filename):
@@ -97,10 +97,12 @@ class Runner(object):
         self.ent_names = read_file('../data', self.p.dataset, 'entityid2name.txt', 'name')
         self.rel_names = read_file('../data', self.p.dataset, 'relationid2name.txt', 'name')
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
-        self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
+        if self.p.pretrained_model_name.lower() == 'bert':
+            self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
+        elif self.p.pretrained_model_name.lower() == 'roberta':
+            self.tok = RobertaTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
 
-        # for quickly load data
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_bert')
+        triples_save_file = '../data/{}/{}_{}.txt'.format(self.p.dataset, 'loaded_triples', self.p.pretrained_model_name.lower())
 
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
@@ -108,16 +110,17 @@ class Runner(object):
             self.triples = ddict(list)
             for sub, rel, obj in tqdm(self.data['train']):
                 text_ids, text_mask = construct_input_text(sub, rel)
-                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                self.triples['train'].append({'triple': (sub, rel, -1), 'label': [obj], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(self.mask_token_id)})
                 rel_inv = rel + self.p.num_rel
                 text_ids, text_mask = construct_input_text(obj, rel_inv)
-                self.triples['train'].append({'triple': (obj, rel_inv, -1), 'label': [sub], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                self.triples['train'].append(
+                {'triple': (obj, rel_inv, -1), 'label': [sub], 'sub_samp': 1, 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(self.mask_token_id)})
 
             for split in ['test', 'valid']:
                 for sub, rel, obj in tqdm(self.data[split]):
                     text_ids, text_mask = construct_input_text(sub, rel)
                     self.triples['{}_{}'.format(split, 'tail')].append(
-                        {'triple': (sub, rel, obj), 'label': self.sr2o_all[(sub, rel)], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                        {'triple': (sub, rel, obj), 'label': self.sr2o_all[(sub, rel)], 'text_ids': text_ids, 'text_mask': text_mask, 'pred_pos': text_ids.index(self.mask_token_id)})
 
 
                     rel_inv = rel + self.p.num_rel
@@ -125,7 +128,7 @@ class Runner(object):
                     text_ids, text_mask = construct_input_text(obj, rel_inv)
                     self.triples['{}_{}'.format(split, 'head')].append(
                         {'triple': (obj, rel_inv, sub), 'label': self.sr2o_all[(obj, rel_inv)], 'text_ids': text_ids,
-                         'text_mask': text_mask, 'pred_pos': text_ids.index(103)})
+                         'text_mask': text_mask, 'pred_pos': text_ids.index(self.mask_token_id)})
 
 
                 print('{}_{} num is {}'.format(split, 'tail', len(self.triples['{}_{}'.format(split, 'tail')])))
@@ -187,6 +190,11 @@ class Runner(object):
         else:
             self.device = torch.device('cpu')
 
+        # [MASK] token id is 103 in bert and <mask> token id is 50264 in roberta
+        if self.p.pretrained_model_name.lower() == 'bert':
+            self.mask_token_id = 103
+        elif self.p.pretrained_model_name.lower() == 'roberta':
+            self.mask_token_id = 50264
         self.load_data()
         self.model = self.add_model(self.p.model, self.p.score_func)
         self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
@@ -451,19 +459,21 @@ class Runner(object):
         try:
             if not self.p.test:
 
-
+                kill_cnt = 0
                 for epoch in range(self.p.load_epoch+1, self.p.max_epochs+1):
                     train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
                     # if ((epoch + 1) % 10 == 0):
                     combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
                     if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
-                        kill_cnt = epoch - self.best_epoch + 1
+                        kill_cnt += 1
                         if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
                             self.p.gamma -= 5
                             print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
                         if kill_cnt > self.p.early_stop:
                             print("Early Stopping!!")
                             break
+                    else:
+                        kill_cnt = 0
                     self.save_model(combine_val_results, 'combine', epoch)
                     self.save_model(struc_val_results, 'struc', epoch)
                     self.save_model(lm_val_results, 'text', epoch)
@@ -553,7 +563,8 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', type=int, default=6, help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
 
     ## LLM params
-    parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base'])
+    parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base', 'roberta_large', 'roberta_base'])
+    parser.add_argument('-pretrained_model_name', type=str, default='bert', help='')
     parser.add_argument('-prompt_hidden_dim', default=-1, type=int, help='')
     parser.add_argument('-text_len', default=72, type=int, help='')
     parser.add_argument('-prompt_length', default=10, type=int, help='')
@@ -566,11 +577,16 @@ if __name__ == '__main__':
 
     if args.load_path == None and args.load_epoch == 0 and args.load_type == '':
         args.name = args.name + '_' + time.strftime('%d_%m_%Y') + '_' + time.strftime('%H:%M:%S')
-
+    args.pretrained_model_name = args.pretrained_model.split('_')[0]
+    
     if args.pretrained_model == 'bert_large':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_large'
     elif args.pretrained_model == 'bert_base':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_base'
+    elif args.pretrained_model == 'roberta_large':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_large'
+    elif args.pretrained_model == 'roberta_base':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_base'
 
     args.vocab_size = AutoConfig.from_pretrained(args.pretrained_model).vocab_size
     args.model_dim = AutoConfig.from_pretrained(args.pretrained_model).hidden_size

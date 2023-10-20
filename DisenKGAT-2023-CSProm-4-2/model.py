@@ -3,6 +3,7 @@ import torch.nn as nn
 from DisenLayer import *
 from transformers import AutoConfig
 from bert_for_layerwise import BertModelForLayerwise
+from roberta_for_layerwise import RobertaModelForLayerwise
 
 
 class CLUBSample(nn.Module):  # Sampled version of the CLUB estimator
@@ -265,11 +266,13 @@ class DisenKGAT_ConvE(CapsuleBase):
         self.fc = torch.nn.Linear(self.flat_sz, self.embed_dim)
 
         self.rel_weight = self.conv_ls[-1].rel_weight
-
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        if self.p.pretrained_model_name.lower() == 'bert':
+            self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        elif self.p.pretrained_model_name.lower() == 'roberta':
+            self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
         # self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
@@ -279,7 +282,7 @@ class DisenKGAT_ConvE(CapsuleBase):
 
         self.loss_fn = get_loss_fn(params)
 
-        ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
+        ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
         # if perform weighted sum of losses
@@ -386,7 +389,10 @@ class DisenKGAT_TransE(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        if self.p.pretrained_model_name.lower() == 'bert':
+            self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        elif self.p.pretrained_model_name.lower() == 'roberta':
+            self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
         # self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
@@ -396,7 +402,7 @@ class DisenKGAT_TransE(CapsuleBase):
 
         self.loss_fn = get_loss_fn(params)
 
-        ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
+        ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
     
@@ -509,7 +515,10 @@ class DisenKGAT_DistMult(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        if self.p.pretrained_model_name.lower() == 'bert':
+            self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
+        elif self.p.pretrained_model_name.lower() == 'roberta':
+            self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
         # self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
@@ -519,7 +528,7 @@ class DisenKGAT_DistMult(CapsuleBase):
 
         self.loss_fn = get_loss_fn(params)
 
-        ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
+        ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
 
