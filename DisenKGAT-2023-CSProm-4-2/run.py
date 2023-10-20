@@ -202,7 +202,7 @@ class Runner(object):
         self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
         self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
 
-        os.makedirs('./checkpints', exist_ok=True)
+        os.makedirs('./checkpoints', exist_ok=True)
 
         if self.p.load_path != None and self.p.load_epoch > 0 and self.p.load_type != '':
             self.path_template = os.path.join('./checkpoints', self.p.load_path)
