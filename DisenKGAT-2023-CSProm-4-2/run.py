@@ -97,12 +97,14 @@ class Runner(object):
         self.ent_names = read_file('../data', self.p.dataset, 'entityid2name.txt', 'name')
         self.rel_names = read_file('../data', self.p.dataset, 'relationid2name.txt', 'name')
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
-        if self.p.pretrained_model_name.lower() == 'bert':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
             self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
-        elif self.p.pretrained_model_name.lower() == 'roberta':
+            triples_save_file_name = 'bert'
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
             self.tok = RobertaTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
+            triples_save_file_name = 'roberta'
 
-        triples_save_file = '../data/{}/{}_{}.txt'.format(self.p.dataset, 'loaded_triples', self.p.pretrained_model_name.lower())
+        triples_save_file = '../data/{}/{}_{}.txt'.format(self.p.dataset, 'loaded_triples', triples_save_file_name)
 
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
@@ -191,9 +193,9 @@ class Runner(object):
             self.device = torch.device('cpu')
 
         # [MASK] token id is 103 in bert and <mask> token id is 50264 in roberta
-        if self.p.pretrained_model_name.lower() == 'bert':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
             self.mask_token_id = 103
-        elif self.p.pretrained_model_name.lower() == 'roberta':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
             self.mask_token_id = 50264
         self.load_data()
         self.model = self.add_model(self.p.model, self.p.score_func)
@@ -288,7 +290,7 @@ class Runner(object):
 
     def load_model(self, load_path):
 
-        state = torch.load(load_path)
+        state = torch.load(load_path, map_location=self.device)
         state_dict = state['state_dict']
         self.best_val_mrr[self.p.load_type] = state['best_val_mrr']
         self.best_epoch[self.p.load_type] = self.p.load_epoch
@@ -564,7 +566,7 @@ if __name__ == '__main__':
 
     ## LLM params
     parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base', 'roberta_large', 'roberta_base'])
-    parser.add_argument('-pretrained_model_name', type=str, default='bert', help='')
+    parser.add_argument('-pretrained_model_name', type=str, default='bert_large', help='')
     parser.add_argument('-prompt_hidden_dim', default=-1, type=int, help='')
     parser.add_argument('-text_len', default=72, type=int, help='')
     parser.add_argument('-prompt_length', default=10, type=int, help='')
@@ -577,8 +579,8 @@ if __name__ == '__main__':
 
     if args.load_path == None and args.load_epoch == 0 and args.load_type == '':
         args.name = args.name + '_' + time.strftime('%d_%m_%Y') + '_' + time.strftime('%H:%M:%S')
-    args.pretrained_model_name = args.pretrained_model.split('_')[0]
-    
+
+    args.pretrained_model_name = args.pretrained_model    
     if args.pretrained_model == 'bert_large':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_large'
     elif args.pretrained_model == 'bert_base':

@@ -269,9 +269,9 @@ class DisenKGAT_ConvE(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
@@ -282,7 +282,7 @@ class DisenKGAT_ConvE(CapsuleBase):
 
         self.loss_fn = get_loss_fn(params)
 
-        ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
+        ent_text_embeds_file = '../data/{}/entity_embeds_{}.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
         # if perform weighted sum of losses
@@ -389,9 +389,9 @@ class DisenKGAT_TransE(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
@@ -402,7 +402,7 @@ class DisenKGAT_TransE(CapsuleBase):
 
         self.loss_fn = get_loss_fn(params)
 
-        ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
+        ent_text_embeds_file = '../data/{}/entity_embeds_{}.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
     
@@ -515,9 +515,9 @@ class DisenKGAT_DistMult(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
