@@ -19,11 +19,12 @@ class MEM_Model(nn.Module):
                 p.requires_grad = False
 
         self.loss_fn = get_loss_fn(params)
-        self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
-
-        # ent_text_embeds_file = '../data/{}/{}.pt'.format(self.p.dataset, 'entity_bert_embeds')
-        # self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
-        # self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
+        if self.p.output_layer == 'classifier':
+            self.ent_classifier = torch.nn.Linear(self.plm_configs.hidden_size, self.p.num_ent)
+        elif self.p.output_layer == 'transformer':
+            ent_text_embeds_file = '../data/{}/entity_embeds_{}.pt'.format(self.p.dataset, self.p.pretrained_model_name)
+            self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
+            self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
 
         self.bceloss = torch.nn.BCELoss(reduction='none')
         self.sigmoid = torch.nn.Sigmoid()
@@ -41,9 +42,11 @@ class MEM_Model(nn.Module):
             mask_token_state.append(pred_embed)
         mask_token_state = torch.cat(mask_token_state, dim=0)
 
-        output = self.ent_classifier(mask_token_state)
-        # output_tmp = self.ent_transform(mask_token_state)
-        # output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
+        if self.p.output_layer == 'classifier':
+            output = self.ent_classifier(mask_token_state)
+        elif self.p.output_layer == 'transformer':
+            output_tmp = self.ent_transform(mask_token_state)
+            output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
 
         return output
 
