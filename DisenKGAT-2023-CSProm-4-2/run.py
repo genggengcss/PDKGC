@@ -405,10 +405,13 @@ class Runner(object):
             losses_lm.append(loss_lm.item())
 
             # weighted sum:
-            # loss_weighted_sum = self.model.loss_weight(loss_struc, loss_lm)
-            # loss = loss_weighted_sum + self.p.alpha * corr
+            if self.p.loss_weight:
+                loss_weighted_sum = self.model.loss_weight(loss_struc, loss_lm)
+                loss = loss_weighted_sum + self.p.alpha * corr
             # simple sum
-            loss = loss_struc + loss_lm + self.p.alpha * corr
+            else:
+                loss = loss_struc + loss_lm + self.p.alpha * corr
+
             corr_losses.append(corr.item())
 
             loss.backward()
@@ -511,6 +514,7 @@ if __name__ == '__main__':
     parser.add_argument('-model', dest='model', default='disenkgat', help='Model Name')
     parser.add_argument('-score_func', dest='score_func', default='conve', help='Score Function for Link prediction')
     parser.add_argument('-opn', dest='opn', default='cross', help='Composition Operation to be used in RAGAT')
+    parser.add_argument('-loss_weight', dest='loss_weight', action='store_true', help='whether to use weighted loss')
     # opn is new hyperparameter
     parser.add_argument('-batch', dest='batch_size', default=2048, type=int, help='Batch size')
     parser.add_argument('-test_batch', dest='test_batch_size', default=2048, type=int,
@@ -589,7 +593,6 @@ if __name__ == '__main__':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_large'
     elif args.pretrained_model == 'roberta_base':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_base'
-
     args.vocab_size = AutoConfig.from_pretrained(args.pretrained_model).vocab_size
     args.model_dim = AutoConfig.from_pretrained(args.pretrained_model).hidden_size
     if args.prompt_hidden_dim == -1:

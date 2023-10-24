@@ -286,7 +286,8 @@ class DisenKGAT_ConvE(CapsuleBase):
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
         # if perform weighted sum of losses
-        # self.loss_weight = AutomaticWeightedLoss(2)
+        if self.p.loss_weight:
+            self.loss_weight = AutomaticWeightedLoss(2)
     def concat(self, e1_embed, rel_embed):
         e1_embed = e1_embed.view(-1, 1, self.embed_dim)
         rel_embed = rel_embed.view(-1, 1, self.embed_dim)
@@ -405,6 +406,8 @@ class DisenKGAT_TransE(CapsuleBase):
         ent_text_embeds_file = '../data/{}/entity_embeds_{}.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
+        if self.p.loss_weight:
+            self.loss_weight = AutomaticWeightedLoss(2)
     
     def lld_best(self, sub, rel):
         return self.lld_bst(sub, rel, self.drop)
@@ -531,6 +534,8 @@ class DisenKGAT_DistMult(CapsuleBase):
         ent_text_embeds_file = '../data/{}/entity_{}_embeds.pt'.format(self.p.dataset, self.p.pretrained_model_name.lower())
         self.ent_text_embeds = torch.load(ent_text_embeds_file).to(self.device)
         self.ent_transform = torch.nn.Linear(self.plm_configs.hidden_size, self.plm_configs.hidden_size)
+        if self.p.loss_weight:
+            self.loss_weight = AutomaticWeightedLoss(2)
 
     def lld_best(self, sub, rel):
         return self.lld_bst(sub, rel, self.drop)
