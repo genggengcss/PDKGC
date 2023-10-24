@@ -240,15 +240,18 @@ class Runner(object):
             model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
 
             # if we want to load pretrained DisenKGAT_ConvE
-            # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
-            # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
-            # state = torch.load(model_save_path, map_location=self.device)
-            # pretrained_dict = state['state_dict']
-            # model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
-            # model_dict = model.state_dict()
-            # pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
-            # model_dict.update(pretrained_dict)
-            # model.load_state_dict(model_dict)
+        elif model_name.lower() == 'pretrained_disenkgat_conve':
+            if self.p.dataset =='FB15k-237':
+                model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
+            elif self.p.dataset == 'WN18RR':
+                model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
+            state = torch.load(model_save_path, map_location=self.device)
+            pretrained_dict = state['state_dict']
+            model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+            model_dict = model.state_dict()
+            pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
+            model_dict.update(pretrained_dict)
+            model.load_state_dict(model_dict)
         else:
             raise NotImplementedError
 
