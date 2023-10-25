@@ -13,6 +13,22 @@ from torch.nn import Parameter
 import torch.nn as nn
 np.set_printoptions(precision=4)
 
+from score_funcs import ConvE, TransE, DistMult
+from bert_for_layerwise import BertModelForLayerwise
+from roberta_for_layerwise import RobertaModelForLayerwise
+
+SCORE_FUNC_CLASS = {
+    'conve': ConvE,
+    'transe': TransE,
+    'distmult': DistMult
+}
+
+PRETRAINED_LANGUAGE_MODEL_CLASS = {
+    'bert_base': BertModelForLayerwise,
+    'bert_large': BertModelForLayerwise,
+    'roberta_base': RobertaModelForLayerwise,
+    'roberta_large': RobertaModelForLayerwise
+}
 
 def set_gpu(gpus):
     """

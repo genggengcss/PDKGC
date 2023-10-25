@@ -198,7 +198,7 @@ class Runner(object):
         elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.mask_token_id = 50264
         self.load_data()
-        self.model = self.add_model(self.p.model, self.p.score_func)
+        self.model = self.add_model(self.p.model)
         self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
 
         self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
@@ -216,7 +216,7 @@ class Runner(object):
             self.path_template = os.path.join('./checkpoints', self.p.name)
 
 
-    def add_model(self, model, score_func):
+    def add_model(self, model):
         """
         Creates the computational graph
 
@@ -230,24 +230,43 @@ class Runner(object):
 
         """
 
-        model_name = '{}_{}'.format(model, score_func)
+        # model_name = '{}_{}'.format(model, score_func)
 
-        if model_name.lower() == 'disenkgat_transe':
-            model = DisenKGAT_TransE(self.edge_index, self.edge_type, params=self.p)
-        elif model_name.lower() == 'disenkgat_distmult':
-            model = DisenKGAT_DistMult(self.edge_index, self.edge_type, params=self.p)
-        elif model_name.lower() == 'disenkgat_conve':
-            model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+        # if model_name.lower() == 'disenkgat_transe':
+        #     model = DisenKGAT_TransE(self.edge_index, self.edge_type, params=self.p)
+        # elif model_name.lower() == 'disenkgat_distmult':
+        #     model = DisenKGAT_DistMult(self.edge_index, self.edge_type, params=self.p)
+        # elif model_name.lower() == 'disenkgat_conve':
+        #     model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
 
-            # if we want to load pretrained DisenKGAT_ConvE
-        elif model_name.lower() == 'pretrained_disenkgat_conve':
+        #     # if we want to load pretrained DisenKGAT_ConvE
+        # elif model_name.lower() == 'pretrained_disenkgat_conve':
+        #     if self.p.dataset =='FB15k-237':
+        #         model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
+        #     elif self.p.dataset == 'WN18RR':
+        #         model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
+        #     state = torch.load(model_save_path, map_location=self.device)
+        #     pretrained_dict = state['state_dict']
+        #     model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+        #     model_dict = model.state_dict()
+        #     pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
+        #     model_dict.update(pretrained_dict)
+        #     model.load_state_dict(model_dict)
+        # else:
+        #     raise NotImplementedError
+
+        model_name = model
+
+        if model_name.lower() == 'disenkgat':
+            model = DisenCSPROM(self.edge_index, self.edge_type, params=self.p)
+        elif model_name.lower() == 'pretrained_disenkgat':
             if self.p.dataset =='FB15k-237':
                 model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
             elif self.p.dataset == 'WN18RR':
                 model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
             state = torch.load(model_save_path, map_location=self.device)
             pretrained_dict = state['state_dict']
-            model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
+            model = DisenCSPROM(self.edge_index, self.edge_type, params=self.p)
             model_dict = model.state_dict()
             pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
             model_dict.update(pretrained_dict)
