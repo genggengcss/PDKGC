@@ -4,6 +4,7 @@ from DisenLayer import *
 from transformers import AutoConfig
 from bert_for_layerwise import BertModelForLayerwise
 from roberta_for_layerwise import RobertaModelForLayerwise
+# from score_funcs import GRAPH_MODEL_CLASS, ConvE, TransE, DistMult
 
 
 class CLUBSample(nn.Module):  # Sampled version of the CLUB estimator
@@ -269,9 +270,9 @@ class DisenKGAT_ConvE(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or self.p.pretrained_model_name.lower() == 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
@@ -288,6 +289,7 @@ class DisenKGAT_ConvE(CapsuleBase):
         # if perform weighted sum of losses
         if self.p.loss_weight:
             self.loss_weight = AutomaticWeightedLoss(2)
+            
     def concat(self, e1_embed, rel_embed):
         e1_embed = e1_embed.view(-1, 1, self.embed_dim)
         rel_embed = rel_embed.view(-1, 1, self.embed_dim)
@@ -390,9 +392,9 @@ class DisenKGAT_TransE(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or self.p.pretrained_model_name.lower() == 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
@@ -518,9 +520,9 @@ class DisenKGAT_DistMult(CapsuleBase):
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
         self.plm_configs.prompt_hidden_dim = self.p.prompt_hidden_dim
-        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or self.p.pretrained_model_name.lower() == 'bert_large':
             self.plm = BertModelForLayerwise.from_pretrained(self.p.pretrained_model)
-        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.plm = RobertaModelForLayerwise.from_pretrained(self.p.pretrained_model)
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
@@ -627,3 +629,12 @@ class DisenKGAT_DistMult(CapsuleBase):
         output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
 
         return logist, output, corr
+
+'''Code modularity
+class DisenCSPROM(CapsuleBase):
+    def __init__(self, edge_index, edge_type, params=None):
+        super(self.__class__, self).__init__(edge_index, edge_type, params.num_rel, params)
+
+        self.score_func = SCORE_FUNC_CLASS[self.p.score_func](params)
+        # TO-DO
+'''

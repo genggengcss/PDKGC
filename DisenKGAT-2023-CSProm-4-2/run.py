@@ -97,10 +97,10 @@ class Runner(object):
         self.ent_names = read_file('../data', self.p.dataset, 'entityid2name.txt', 'name')
         self.rel_names = read_file('../data', self.p.dataset, 'relationid2name.txt', 'name')
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
-        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or self.p.pretrained_model_name.lower() == 'bert_large':
             self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
             triples_save_file_name = 'bert'
-        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.tok = RobertaTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
             triples_save_file_name = 'roberta'
 
@@ -193,9 +193,9 @@ class Runner(object):
             self.device = torch.device('cpu')
 
         # [MASK] token id is 103 in bert and <mask> token id is 50264 in roberta
-        if self.p.pretrained_model_name.lower() == 'bert_base' or 'bert_large':
+        if self.p.pretrained_model_name.lower() == 'bert_base' or self.p.pretrained_model_name.lower() == 'bert_large':
             self.mask_token_id = 103
-        elif self.p.pretrained_model_name.lower() == 'roberta_base' or 'roberta_large':
+        elif self.p.pretrained_model_name.lower() == 'roberta_base' or self.p.pretrained_model_name.lower() == 'roberta_large':
             self.mask_token_id = 50264
         self.load_data()
         self.model = self.add_model(self.p.model, self.p.score_func)
