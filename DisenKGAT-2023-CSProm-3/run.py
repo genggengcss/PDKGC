@@ -5,7 +5,7 @@ import transformers
 from transformers import AutoConfig, BertTokenizer
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
-
+import traceback
 
 def frozen_params(module: nn.Module):
     for p in module.parameters():
@@ -95,7 +95,7 @@ class Runner(object):
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
         self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
 
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples2')
+        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_bert_no_textp')
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
         else:
@@ -363,7 +363,7 @@ class Runner(object):
                 self.optimizer_mi.step()
                 lld_losses.append(lld_loss.item())
 
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 # if self.p.mi_train:
                 print(
                     '[E:{}| {}]: total Loss:{:.5}, Train Loss:{:.5}, Corr Loss:{:.5}, Val MRR:{:.5}\t{}'.format(
