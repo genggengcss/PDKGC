@@ -57,8 +57,8 @@ class DisenLayer(MessagePassing):
     def message(self, edge_index_i, edge_index_j, x_i, x_j, edge_type, rel_embed, rel_weight):
         '''
         edge_index_i : [E]
-        x_i: [E, F]
-        x_j: [E, F]
+        x_i: [E, K, F]
+        x_j: [E, K, F]
         '''
         rel_embed = torch.index_select(rel_embed, 0, edge_type)
         rel_weight = torch.index_select(rel_weight, 0, edge_type)

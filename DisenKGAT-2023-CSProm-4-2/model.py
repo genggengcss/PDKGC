@@ -2,8 +2,8 @@ from helper import *
 import torch.nn as nn
 from DisenLayer import *
 from transformers import AutoConfig
-from bert_for_layerwise import BertModelForLayerwise
-from roberta_for_layerwise import RobertaModelForLayerwise
+# from bert_for_layerwise import BertModelForLayerwise
+# from roberta_for_layerwise import RobertaModelForLayerwise
 
 
 class CLUBSample(nn.Module):  # Sampled version of the CLUB estimator

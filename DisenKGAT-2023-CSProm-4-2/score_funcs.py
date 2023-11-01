@@ -20,7 +20,6 @@ class ConvE(nn.Module):
         flat_sz_w = self.configs.k_h - self.configs.ker_sz + 1
         self.flat_sz = flat_sz_h * flat_sz_w * self.configs.num_filt
         self.fc = torch.nn.Linear(self.flat_sz, self.configs.embed_dim)
-        self.bias = nn.Parameter(torch.zeros(self.configs.n_ent))
 
     def concat(self, e1_embed, rel_embed):
         e1_embed = e1_embed.view(-1, 1, e1_embed.size(-1))
