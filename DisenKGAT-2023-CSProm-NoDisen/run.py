@@ -199,7 +199,8 @@ class Runner(object):
             self.mask_token_id = 50264
         self.load_data()
         self.model = self.add_model(self.p.model)
-        self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
+        # self.optimizer, self.optimizer_mi = self.add_optimizer(self.model)
+        self.optimizer = self.add_optimizer(self.model)
 
         self.best_val_mrr = {'combine': 0., 'struc': 0., 'text': 0.}
         self.best_epoch = {'combine': 0, 'struc': 0, 'text': 0}
@@ -279,15 +280,15 @@ class Runner(object):
 
     def add_optimizer(self, model):
 
-
-        mi_disc_params = list(map(id, model.mi_Discs.parameters()))
-        rest_params = filter(lambda x: id(x) not in mi_disc_params, model.parameters())
+        # mi_disc_params = list(map(id, model.mi_Discs.parameters()))
+        # rest_params = filter(lambda x: id(x) not in mi_disc_params, model.parameters())
+        rest_params = model.parameters()
         # for m in model.mi_Discs.modules():
         #     print(m)
         # for name, parameters in model.named_parameters():
         #     print(name, ':', parameters.size(), parameters.requires_grad)
-        return torch.optim.Adam(rest_params, lr=self.p.lr, weight_decay=self.p.l2), torch.optim.Adam(
-            model.mi_Discs.parameters(), lr=self.p.lr, weight_decay=self.p.l2)
+        return torch.optim.Adam(rest_params, lr=self.p.lr, weight_decay=self.p.l2)  # , torch.optim.Adam(
+            # model.mi_Discs.parameters(), lr=self.p.lr, weight_decay=self.p.l2)
 
 
 
@@ -348,7 +349,7 @@ class Runner(object):
 
             for step, batch in enumerate(train_iter):
                 sub, rel, obj, label, text_ids, text_mask, pred_pos = self.read_batch(batch, split)
-                pred, output, _ = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, split)
+                pred, output = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, split)
                 b_range = torch.arange(pred.size()[0], device=self.device)
                 target_output = output[b_range, obj]
                 target_pred = pred[b_range, obj]
@@ -409,16 +410,17 @@ class Runner(object):
         losses_lm = []
         corr_losses = []
 
-        lld_losses = []
+        # lld_losses = []
         train_iter = iter(self.data_iter['train'])
 
         for step, batch in enumerate(train_iter):
             self.optimizer.zero_grad()
             # if self.p.mi_train and self.p.mi_method.startswith('club'):
-            self.model.mi_Discs.eval()
+            # self.model.mi_Discs.eval()
             sub, rel, obj, label, text_ids, text_mask, pred_pos = self.read_batch(batch, 'train')
 
-            pred, output, corr = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, 'train')
+            # pred, output, corr = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, 'train')
+            pred, output = self.model.forward(sub, rel, text_ids, text_mask, pred_pos, 'train')
 
             loss_struc = self.model.loss_fn(pred, label)
             loss_lm = self.model.loss_fn(output, label)
@@ -429,38 +431,40 @@ class Runner(object):
             # weighted sum:
             if self.p.loss_weight:
                 loss_weighted_sum = self.model.loss_weight(loss_struc, loss_lm)
-                loss = loss_weighted_sum + self.p.alpha * corr
+                loss = loss_weighted_sum    # + self.p.alpha * corr
             # simple sum
             else:
-                loss = loss_struc + loss_lm + self.p.alpha * corr
+                loss = loss_struc + loss_lm # + self.p.alpha * corr
 
-            corr_losses.append(corr.item())
+            # corr_losses.append(corr.item())
 
             loss.backward()
             self.optimizer.step()
             losses.append(loss.item())
             # start to compute mi_loss
             # if self.p.mi_train and self.p.mi_method.startswith('club'):
-            for i in range(self.p.mi_epoch):
-                self.model.mi_Discs.train()
-                lld_loss = self.model.lld_best(sub, rel)
-                self.optimizer_mi.zero_grad()
-                lld_loss.backward()
-                self.optimizer_mi.step()
-                lld_losses.append(lld_loss.item())
+            # for i in range(self.p.mi_epoch):
+            #     self.model.mi_Discs.train()
+            #     lld_loss = self.model.lld_best(sub, rel)
+            #     self.optimizer_mi.zero_grad()
+            #     lld_loss.backward()
+            #     self.optimizer_mi.step()
+            #     lld_losses.append(lld_loss.item())
 
             if step % 1000 == 0:
                 # if self.p.mi_train:
                 print(
-                    '[E:{}| {}]: Total Loss:{:.5}, Train {} Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
-                        epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_struc), np.mean(losses_lm), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                    # '[E:{}| {}]: Total Loss:{:.5}, Train {} Loss:{:.5}, Train MASK Loss:{:.5}, Corr Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
+                    #     epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_struc), np.mean(losses_lm), np.mean(corr_losses), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                    '[E:{}| {}]: Total Loss:{:.5}, Train {} Loss:{:.5}, Train MASK Loss:{:.5}\t{} \n \t Best Combine Valid MRR: {:.5} \t Best Struc Valid MRR: {:.5} \t Best LM Valid MRR: {:.5}'.format(
+                        epoch, step, np.mean(losses), self.p.score_func, np.mean(losses_struc), np.mean(losses_lm), self.p.name, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
         loss = np.mean(losses_struc)
         # if self.p.mi_train:
-        loss_corr = np.mean(corr_losses)
-        if self.p.mi_method.startswith('club') and self.p.mi_epoch == 1:
-            loss_lld = np.mean(lld_losses)
-            return loss, loss_corr, loss_lld
-        return loss, loss_corr, 0.
+        # loss_corr = np.mean(corr_losses)
+        # if self.p.mi_method.startswith('club') and self.p.mi_epoch == 1:
+        #     loss_lld = np.mean(lld_losses)
+        #     return loss, loss_corr, loss_lld
+        return loss # , loss_corr, 0.
 
     def save_model(self, results, type, epoch):
         if results['mrr'] > self.best_val_mrr[type]:
@@ -488,7 +492,8 @@ class Runner(object):
 
                 kill_cnt = 0
                 for epoch in range(self.p.load_epoch+1, self.p.max_epochs+1):
-                    train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
+                    # train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
+                    train_loss = self.run_epoch(epoch)
                     # if ((epoch + 1) % 10 == 0):
                     combine_val_results, struc_val_results, lm_val_results = self.evaluate('valid', epoch)
                     if combine_val_results['mrr'] <= self.best_val_mrr['combine']:
@@ -507,13 +512,18 @@ class Runner(object):
                     # if self.p.mi_train:
                     if self.p.mi_method == 'club_s' or self.p.mi_method == 'club_b':
                         print(
-                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, \n \t Best Combine Valid MRR: {:.5} \n \t Best Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
-                                epoch, train_loss, corr_loss,
-                                lld_loss, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                            # '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, \n \t Best Combine Valid MRR: {:.5} \n \t Best Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                            #     epoch, train_loss, corr_loss,
+                            #     lld_loss, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                            '[Epoch {}]: Training Loss: {:.5}, \n \t Best Combine Valid MRR: {:.5} \n \t Best Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
                     else:
                         print(
-                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, \n\t Best Combine Valid MRR: {:.5} \n \tBest Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
-                                epoch, train_loss, corr_loss,
+                            # '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, \n\t Best Combine Valid MRR: {:.5} \n \tBest Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                            #     epoch, train_loss, corr_loss,
+                            #     self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
+                            '[Epoch {}]: Training Loss: {:.5}, \n\t Best Combine Valid MRR: {:.5} \n \tBest Struc Valid MRR: {:.5} \n \tBest LM Valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, 
                                 self.best_val_mrr['combine'], self.best_val_mrr['struc'], self.best_val_mrr['text']))
 
             else:

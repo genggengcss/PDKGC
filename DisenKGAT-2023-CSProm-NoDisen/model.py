@@ -86,25 +86,25 @@ class CapsuleBase(BaseModel):
         self.device = self.edge_index.device
         self.init_embed = get_param((self.p.num_ent, self.p.embed_dim))
         self.init_rel = get_param((num_rel * 2, self.p.embed_dim))
-        self.pca = SparseInputLinear(self.p.embed_dim, self.p.num_factors * self.p.embed_dim)
-        conv_ls = []
-        for i in range(self.p.gcn_layer):
-            conv = DisenLayer(self.edge_index, self.edge_type, self.p.embed_dim, self.p.embed_dim, num_rel,
-                              act=self.act, params=self.p, head_num=self.p.head_num)
-            self.add_module('conv_{}'.format(i), conv)
-            conv_ls.append(conv)
+        # self.pca = SparseInputLinear(self.p.embed_dim, self.p.num_factors * self.p.embed_dim)
+        # conv_ls = []
+        # for i in range(self.p.gcn_layer):
+        #     conv = DisenLayer(self.edge_index, self.edge_type, self.p.embed_dim, self.p.embed_dim, num_rel,
+        #                       act=self.act, params=self.p, head_num=self.p.head_num)
+        #     self.add_module('conv_{}'.format(i), conv)
+        #     conv_ls.append(conv)
 
-        self.conv_ls = conv_ls
+        # self.conv_ls = conv_ls
         # if self.p.mi_train:
-        if self.p.mi_method == 'club_b':
-            num_dis = int((self.p.num_factors) * (self.p.num_factors - 1) / 2)
-            # print(num_dis)
-            self.mi_Discs = nn.ModuleList(
-                [CLUBSample(self.p.embed_dim, self.p.embed_dim, self.p.embed_dim) for fac in range(num_dis)])
-        elif self.p.mi_method == 'club_s':
-            self.mi_Discs = nn.ModuleList(
-                [CLUBSample((fac + 1) * self.p.embed_dim, self.p.embed_dim, (fac + 1) * self.p.embed_dim) for fac in
-                 range(self.p.num_factors - 1)])
+        # if self.p.mi_method == 'club_b':
+        #     num_dis = int((self.p.num_factors) * (self.p.num_factors - 1) / 2)
+        #     # print(num_dis)
+        #     self.mi_Discs = nn.ModuleList(
+        #         [CLUBSample(self.p.embed_dim, self.p.embed_dim, self.p.embed_dim) for fac in range(num_dis)])
+        # elif self.p.mi_method == 'club_s':
+        #     self.mi_Discs = nn.ModuleList(
+        #         [CLUBSample((fac + 1) * self.p.embed_dim, self.p.embed_dim, (fac + 1) * self.p.embed_dim) for fac in
+        #          range(self.p.num_factors - 1)])
 
         self.register_parameter('bias', Parameter(torch.zeros(self.p.num_ent)))
         # self.rel_drop = nn.Dropout(0.1)
@@ -171,31 +171,35 @@ class CapsuleBase(BaseModel):
 
     def forward_base(self, sub, rel, drop1, mode):
         # if not self.p.no_enc:
-        x = self.act(self.pca(self.init_embed)).view(-1, self.p.num_factors, self.p.embed_dim)  # [N K F]
+        # x = self.act(self.pca(self.init_embed)).view(-1, self.p.num_factors, self.p.embed_dim)  # [N K F]
+        x = self.init_embed.view(-1, self.p.num_factors, self.p.embed_dim)
         r = self.init_rel
-        for conv in self.conv_ls:
-            x, r = conv(x, r, mode)  # N K F
-            x = drop1(x)
+        # for conv in self.conv_ls:
+        #     x, r = conv(x, r, mode)  # N K F
+        #     x = drop1(x)
         sub_emb = torch.index_select(x, 0, sub)
         rel_emb = torch.index_select(self.init_rel, 0, rel).repeat(1, self.p.num_factors)
         rel_emb_single = torch.index_select(self.init_rel, 0, rel)
         sub_emb = sub_emb.view(-1, self.p.embed_dim * self.p.num_factors)
-        mi_loss = self.mi_cal(sub_emb)
+        # mi_loss = self.mi_cal(sub_emb)
 
-        return sub_emb, rel_emb, x, mi_loss, rel_emb_single
+        # return sub_emb, rel_emb, x, mi_loss, rel_emb_single
+        return sub_emb, rel_emb, x, rel_emb_single
 
     def test_base(self, sub, rel, drop1, mode):
-        x = self.act(self.pca(self.init_embed)).view(-1, self.p.num_factors, self.p.embed_dim)  # [N K F]
+        # x = self.act(self.pca(self.init_embed)).view(-1, self.p.num_factors, self.p.embed_dim)  # [N K F]
+        x = self.init_embed.view(-1, self.p.num_factors, self.p.embed_dim)
         r = self.init_rel
-        for conv in self.conv_ls:
-            x, r = conv(x, r, mode)  # N K F
-            x = drop1(x)
+        # for conv in self.conv_ls:
+        #     x, r = conv(x, r, mode)  # N K F
+        #     x = drop1(x)
 
         sub_emb = torch.index_select(x, 0, sub)
         rel_emb = torch.index_select(self.init_rel, 0, rel).repeat(1, self.p.num_factors)
         rel_emb_single = torch.index_select(self.init_rel, 0, rel)
 
-        return sub_emb, rel_emb, x, 0., rel_emb_single
+        # return sub_emb, rel_emb, x, 0., rel_emb_single
+        return sub_emb, rel_emb, x, rel_emb_single
 
 class AutomaticWeightedLoss(nn.Module):
     """automatically weighted multi-task loss
@@ -636,7 +640,7 @@ class DisenCSPROM(CapsuleBase):
         self.score_func = SCORE_FUNC_CLASS[self.p.score_func.lower()](params)
         
         self.drop = torch.nn.Dropout(self.p.hid_drop)
-        self.rel_weight = self.conv_ls[-1].rel_weight
+        # self.rel_weight = self.conv_ls[-1].rel_weight
 
         self.plm_configs = AutoConfig.from_pretrained(self.p.pretrained_model)
         self.plm_configs.prompt_length = self.p.prompt_length
@@ -663,10 +667,12 @@ class DisenCSPROM(CapsuleBase):
         
     def forward(self, sub, rel, text_ids, text_mask, pred_pos, mode='train'):
         if mode == 'train':
-            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.forward_base(sub, rel, self.drop, mode)
+            # sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.forward_base(sub, rel, self.drop, mode)
+            sub_emb, rel_emb, all_ent, rel_emb_single = self.forward_base(sub, rel, self.drop, mode)
             # sub_emb = sub_emb.view(-1, self.p.num_factors, self.p.embed_dim)
         else:
-            sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.test_base(sub, rel, self.drop, mode)
+            # sub_emb, rel_emb, all_ent, corr, rel_emb_single = self.test_base(sub, rel, self.drop, mode)
+            sub_emb, rel_emb, all_ent, rel_emb_single = self.test_base(sub, rel, self.drop, mode)
         
         all_ent = all_ent.view(-1, self.p.num_factors, self.p.embed_dim)
 
@@ -684,12 +690,16 @@ class DisenCSPROM(CapsuleBase):
 
         ent_rel_state = last_hidden_state[:, :self.p.prompt_length * (self.p.num_factors + 1)]
         plm_embeds = torch.chunk(ent_rel_state, chunks=(self.p.num_factors + 1), dim=1)
-        plm_sub_embeds, plm_rel_embed = plm_embeds[:self.p.num_factors], plm_embeds[-1]
+        # plm_sub_embeds, plm_rel_embed = plm_embeds[:self.p.num_factors], plm_embeds[-1]
+        plm_sub_embed, plm_rel_embed = plm_embeds[0], plm_embeds[1]
 
-        plm_sub_embed = torch.stack(plm_sub_embeds, dim=1)
-        plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), self.p.num_factors, -1))
+        # plm_sub_embed = torch.stack(plm_sub_embeds, dim=1)
+        # plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), self.p.num_factors, -1))
+        # plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), self.p.num_factors, -1))
+        plm_sub_embed = self.llm_fc(plm_sub_embed.reshape(sub_emb.size(0), -1)).repeat(1, self.p.num_factors)
         plm_rel_embed = self.llm_fc(plm_rel_embed.reshape(rel_emb.size(0), -1)).repeat(1, self.p.num_factors)
         
+        plm_sub_embed = plm_sub_embed.view(-1, self.p.num_factors, self.p.embed_dim)
         plm_rel_embed = plm_rel_embed.view(-1, self.p.num_factors, self.p.embed_dim)
         attention = self.leakyrelu(torch.einsum('bkf,bkf->bk', [plm_sub_embed, plm_rel_embed]))
         attention = nn.Softmax(dim=-1)(attention)
@@ -713,4 +723,4 @@ class DisenCSPROM(CapsuleBase):
 
         output = torch.einsum('bf,nf->bn', [output_tmp, self.ent_text_embeds])
 
-        return logist, output, corr
+        return logist, output   # , corr

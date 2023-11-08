@@ -6,6 +6,7 @@ from transformers import AutoConfig, BertTokenizer
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
 from transformers import AdamW
+import traceback
 
 def frozen_params(module: nn.Module):
     for p in module.parameters():
@@ -377,22 +378,28 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', type=int, default=6, help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
 
     ## LLM params
-    parser.add_argument('-pretrained_model', type=str, default='bert_base', choices = ['bert_large', 'bert_base'])
-    parser.add_argument('-text_len', default=72, type=int, help='')
+    parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base', 'roberta_large', 'roberta_base'])
+    parser.add_argument('-pretrained_model_name', type=str, default='bert_large', help='')
     parser.add_argument('-desc_max_length', default=40, type=int, help='')
     parser.add_argument('-fine_tune', dest='fine_tune', action='store_true', help='If fine-tune LM or not')
     parser.add_argument('-test', dest='test', action='store_true', help='test the model')
     parser.add_argument('-load_epoch', type=int, default=0)
     parser.add_argument('-load_path', type=str, default=None)
+    parser.add_argument('-output_layer', type=str, default='classifier', choices=['classifier', 'transformer'])
     args = parser.parse_args()
 
     if args.load_path == None and args.load_epoch == 0:
         args.name = args.name + '_' + time.strftime('%d_%m_%Y') + '_' + time.strftime('%H:%M:%S')
 
+    args.pretrained_model_name = args.pretrained_model    
     if args.pretrained_model == 'bert_large':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_large'
     elif args.pretrained_model == 'bert_base':
         args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_base'
+    elif args.pretrained_model == 'roberta_large':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_large'
+    elif args.pretrained_model == 'roberta_base':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_base'
     args.vocab_size = AutoConfig.from_pretrained(args.pretrained_model).vocab_size
     args.model_dim = AutoConfig.from_pretrained(args.pretrained_model).hidden_size
 

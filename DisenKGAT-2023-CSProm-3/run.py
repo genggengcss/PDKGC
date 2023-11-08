@@ -5,7 +5,7 @@ import transformers
 from transformers import AutoConfig, BertTokenizer
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
-
+import traceback
 
 def frozen_params(module: nn.Module):
     for p in module.parameters():
@@ -95,7 +95,7 @@ class Runner(object):
         self.ent_descs = read_file('../data', self.p.dataset, 'entityid2description.txt', 'desc')
         self.tok = BertTokenizer.from_pretrained(self.p.pretrained_model, add_prefix_space=False)
 
-        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples2')
+        triples_save_file = '../data/{}/{}.txt'.format(self.p.dataset, 'loaded_triples_bert_no_textp')
         if os.path.exists(triples_save_file):
             self.triples = json.load(open(triples_save_file))
         else:
@@ -197,20 +197,20 @@ class Runner(object):
     def add_model(self):
 
         # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_156d_07_08_2023_22:35:40'
-        # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
+        model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
         # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
         #
-        # state = torch.load(model_save_path)
-        # pretrained_dict = state['state_dict']
+        state = torch.load(model_save_path)
+        pretrained_dict = state['state_dict']
 
         model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
-        # model_dict = model.state_dict()
-        # pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
-        # #
-        # model_dict.update(pretrained_dict)
-        # #
-        # model.load_state_dict(model_dict)
-        # #
+        model_dict = model.state_dict()
+        pretrained_dict = {k:v for k, v in pretrained_dict.items() if k in model_dict}
+        
+        model_dict.update(pretrained_dict)
+        
+        model.load_state_dict(model_dict)
+        
 
         model.to(self.device)
         return model
@@ -363,7 +363,7 @@ class Runner(object):
                 self.optimizer_mi.step()
                 lld_losses.append(lld_loss.item())
 
-            if step % 100 == 0:
+            if step % 1000 == 0:
                 # if self.p.mi_train:
                 print(
                     '[E:{}| {}]: total Loss:{:.5}, Train Loss:{:.5}, Corr Loss:{:.5}, Val MRR:{:.5}\t{}'.format(
@@ -399,40 +399,41 @@ class Runner(object):
             val_results = {}
             val_results['mrr'] = 0
             kill_cnt = 0
-            for epoch in range(self.p.max_epochs):
-                train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
-                # if ((epoch + 1) % 10 == 0):
-                val_results = self.evaluate('valid', epoch)
+            if not self.p.test:
+                for epoch in range(self.p.max_epochs):
+                    train_loss, corr_loss, lld_loss = self.run_epoch(epoch)
+                    # if ((epoch + 1) % 10 == 0):
+                    val_results = self.evaluate('valid', epoch)
 
-                if val_results['mrr'] > self.best_val_mrr:
-                    self.best_val = val_results
-                    self.best_val_mrr = val_results['mrr']
-                    self.best_epoch = epoch
-                    self.save_model(save_path)
-                    kill_cnt = 0
-                else:
-                    kill_cnt += 1
-                    if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
-                        self.p.gamma -= 5
-                        print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
-                    if kill_cnt > self.p.early_stop:
-                        print("Early Stopping!!")
-                        break
-                # if self.p.mi_train:
-                if self.p.mi_method == 'club_s' or self.p.mi_method == 'club_b':
-                    print(
-                        '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, Best valid MRR: {:.5}\n\n'.format(
-                            epoch, train_loss, corr_loss,
-                            lld_loss, self.best_val_mrr))
-                else:
-                    print(
-                        '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, Best valid MRR: {:.5}\n\n'.format(
-                            epoch, train_loss, corr_loss,
-                            self.best_val_mrr))
-                # else:
-                #     print(
-                #         '[Epoch {}]: Training Loss: {:.5}, Best valid MRR: {:.5}\n\n'.format(epoch, train_loss,
-                #                                                                              self.best_val_mrr))
+                    if val_results['mrr'] > self.best_val_mrr:
+                        self.best_val = val_results
+                        self.best_val_mrr = val_results['mrr']
+                        self.best_epoch = epoch
+                        self.save_model(save_path)
+                        kill_cnt = 0
+                    else:
+                        kill_cnt += 1
+                        if kill_cnt % 10 == 0 and self.p.gamma > self.p.max_gamma:
+                            self.p.gamma -= 5
+                            print('Gamma decay on saturation, updated value of gamma: {}'.format(self.p.gamma))
+                        if kill_cnt > self.p.early_stop:
+                            print("Early Stopping!!")
+                            break
+                    # if self.p.mi_train:
+                    if self.p.mi_method == 'club_s' or self.p.mi_method == 'club_b':
+                        print(
+                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, lld loss :{:.5}, Best valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, corr_loss,
+                                lld_loss, self.best_val_mrr))
+                    else:
+                        print(
+                            '[Epoch {}]: Training Loss: {:.5}, corr Loss: {:.5}, Best valid MRR: {:.5}\n\n'.format(
+                                epoch, train_loss, corr_loss,
+                                self.best_val_mrr))
+                    # else:
+                    #     print(
+                    #         '[Epoch {}]: Training Loss: {:.5}, Best valid MRR: {:.5}\n\n'.format(epoch, train_loss,
+                    #                                                                              self.best_val_mrr))
 
             print('Loading best model, Evaluating on Test data')
             self.load_model(save_path)
@@ -450,6 +451,7 @@ if __name__ == '__main__':
     parser.add_argument('-name', default='testrun', help='Set run name for saving/restoring models')
     parser.add_argument('-data', dest='dataset', default='FB15k-237', help='Dataset to use, default: FB15k-237')
     parser.add_argument('-opn', dest='opn', default='cross', help='Composition Operation to be used in RAGAT')
+    parser.add_argument('-test', dest='test', action='store_true', help='Only run test set')
     # opn is new hyperparameter
     parser.add_argument('-batch', dest='batch_size', default=2048, type=int, help='Batch size')
     parser.add_argument('-test_batch', dest='test_batch_size', default=2048, type=int,

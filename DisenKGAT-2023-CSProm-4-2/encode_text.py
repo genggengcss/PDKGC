@@ -2,7 +2,7 @@ from helper import *
 from data_loader import *
 from model import *
 import transformers
-from transformers import AutoConfig, BertTokenizer, AutoModel
+from transformers import AutoConfig, BertTokenizer, RobertaTokenizer, AutoModel
 transformers.logging.set_verbosity_error()
 from tqdm import tqdm
 
@@ -79,9 +79,13 @@ def load_data(p):
     # load textual data
     ent_names = read_file('../data', p.dataset, 'entityid2name.txt', 'name')
     ent_descs = read_file('../data', p.dataset, 'entityid2description.txt', 'desc')
-    tok = BertTokenizer.from_pretrained(p.pretrained_model, add_prefix_space=False)
+    p.pretrained_model_name = p.pretrained_model.split('/')[-1].split('_')[0]
+    if p.pretrained_model_name.lower() == 'bert':
+        tok = BertTokenizer.from_pretrained(p.pretrained_model, add_prefix_space=False)
+    elif p.pretrained_model_name.lower() == 'roberta':
+        tok = RobertaTokenizer.from_pretrained(p.pretrained_model, add_prefix_space=False)
 
-    triples_save_file = '../data/{}/{}.txt'.format(p.dataset, 'entity_tokens')
+    triples_save_file = '../data/{}/{}_{}.txt'.format(p.dataset, p.pretrained_model_name.lower(), 'entity_tokens')
 
     if os.path.exists(triples_save_file):
         entity_cons = json.load(open(triples_save_file))
@@ -118,7 +122,8 @@ if __name__ == '__main__':
     parser.add_argument('-gpu', type=int, default=6, help='Set GPU Ids : Eg: For CPU = -1, For Single GPU = 0')
 
     ## LLM params
-    parser.add_argument('-pretrained_model', type=str, default='/home/zjlab/gengyx/LMs/BERT_large', help='')
+    parser.add_argument('-pretrained_model', type=str, default='bert_large', choices = ['bert_large', 'bert_base', 'roberta_large', 'roberta_base'])
+    parser.add_argument('-pretrained_model_name', type=str, default='bert', help='')
     parser.add_argument('-text_len', default=72, type=int, help='')
     parser.add_argument('-desc_max_length', default=40, type=int, help='')
     parser.add_argument('-num_workers', type=int, default=0, help='Number of processes to construct batches')
@@ -133,6 +138,16 @@ if __name__ == '__main__':
         torch.backends.cudnn.deterministic = True
     else:
         device = torch.device('cpu')
+    args.pretrained_model_name = args.pretrained_model.split('_')[0]
+    
+    if args.pretrained_model == 'bert_large':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_large'
+    elif args.pretrained_model == 'bert_base':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/BERT_base'
+    elif args.pretrained_model == 'roberta_large':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_large'
+    elif args.pretrained_model == 'roberta_base':
+        args.pretrained_model = '/home/zjlab/gengyx/LMs/RoBERTa_base'
 
 
     args.vocab_size = AutoConfig.from_pretrained(args.pretrained_model).vocab_size
@@ -178,7 +193,7 @@ if __name__ == '__main__':
             text_embeds[ent_id] = sent[i].detach().cpu()
             # text_embeds[ent_id] = sent[i][0].detach().cpu()
 
-    embeds_save_file = '../data/{}/{}.pt'.format(args.dataset, 'entity_bert_embeds')
+    embeds_save_file = '../data/{}/entity_embeds_{}.pt'.format(args.dataset, args.pretrained_model.split('/')[-1].lower())
     torch.save(text_embeds, embeds_save_file)
 
     # print(text_embeds)
