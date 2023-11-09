@@ -200,7 +200,7 @@ class Runner(object):
         model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_FB15k_K4_D200_club_b_mi_drop_200d_08_09_2023_19:21:24'
         # model_save_path = '/home/zjlab/gengyx/KGE/DisenKGAT-2023/checkpoints/ConvE_wn18rr_K2_D200_club_b_mi_drop_200d_27_09_2023_17:12:54'
         #
-        state = torch.load(model_save_path)
+        state = torch.load(model_save_path, map_location=self.device)
         pretrained_dict = state['state_dict']
 
         model = DisenKGAT_ConvE(self.edge_index, self.edge_type, params=self.p)
@@ -256,7 +256,7 @@ class Runner(object):
 
     def load_model(self, load_path):
 
-        state = torch.load(load_path)
+        state = torch.load(load_path, map_location=self.device)
         state_dict = state['state_dict']
         self.best_val = state['best_val']
         self.best_val_mrr = self.best_val['mrr']
