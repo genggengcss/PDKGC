@@ -54,7 +54,7 @@ python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch
 python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -test -load_path $checkpoint_name
 ```
 
-<!-- #### Results (of WN18RR)
+#### Partial Results on WN18RR
 
 | Methods | MRR | MR | Hits@1 | Hits@3 | Hits@10 |
 |--------------------------------------|----|-----|--------|--------|---------|
@@ -64,4 +64,4 @@ python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16
 | fine-tune BERT large (best val)      | 0.53316 |  | 0.48748| 0.55669 | 0.61256 |
 | fine-tune BERT large (test)           | 0.52994 |  | 0.48261 | 0.55871 | 0.61088 |
 |----------------------------------------|----|-----|--------|--------|---------|
-|                  | |  |  |  |  | -->
+|                  | |  |  |  |  |
