@@ -1,12 +1,5 @@
 # PDKGC
 
-## To-Do
-
-- 把环境导出成requirements.txt
-- 小数据集直接放上去，大数据集标明出处
-- 解释每个模型的含义，并告诉读者去对应目录找具体训练命令
-- 把命令中可以固定的参数写死，把命名方法统一成有意义的形式，把乱写的参数（epoch）改成合理值
-
 Code and Data for the paper: "Prompting Disentagled Embeddings for Knowledge Graph Completion with Pre-trained Language Model".
 
 >In this work, we propose a novel method named PDKGC which uses a novel *Prompt* strategy for *Knowledge Graph Completion* on *Pretrained Language Model*, where the PLM is frozen with only the parameters of prompts tunable. \
@@ -24,4 +17,8 @@ The model is developed using PyTorch with environment requirements provided in `
 
 ### Model Illustrations
 
+We provide the codes for our PDKGC and a baseline of MEM_KGC. We also provide the codes for two ablation studies, without Disentangled Embeddings and without Text Prediction, in the folder `PDKGC_without_Disen` and `PDKGC_without_TP`, respectively.
 
+### Training and Testing
+
+To view specific training commands, please go to the README.md file in the corresponding subdirectory.
