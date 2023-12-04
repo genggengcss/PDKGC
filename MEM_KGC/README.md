@@ -5,23 +5,56 @@
 **frozen with learning rate, i.e., model_lr: 5e-4 (can tune)**
 
 #### Running commands
-**1. for training**
-```
-python run.py -epoch 200 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_large -fine_tune
-python run.py -epoch 200 -name LM_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_large
+
+To train the model, determine which pretrained language model for the training. Taking BERT-base as an example:
+
+```bash
+# for WN18RR
+## fine_tune
+python run.py -epoch 200 -name BERT_base_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base -fine_tune
+## frozen
+python run.py -epoch 200 -name BERT_base_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base
+
+# for FB15k-237
+## fine_tune
+python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -fine_tune
+## frozen
+python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base
 ```
 
-**2. for continue training, specify load_epoch and load_path**
-```
-python run.py -epoch 200 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_large -fine_tune -load_epoch 48 -load_path LM_WN18RR_12_10_2023_15:55:43
+To continue training, specify load_epoch and load_path:
+
+```bash
+# for WN18RR
+## fine_tune
+python run.py -epoch 200 -name BERT_base_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base -fine_tune -load_epoch $epoch -load_path $checkpoint_name
+## frozen
+python run.py -epoch 200 -name BERT_base_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base -load_epoch $epoch -load_path $checkpoint_name
+
+# for FB15k-237
+## fine_tune
+python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -fine_tune -load_epoch $epoch -load_path $checkpoint_name
+## frozen
+python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -load_epoch $epoch -load_path $checkpoint_name
 ```
 
-**3. for testing, set params: test and load_path**
-```
-python run.py -epoch 200 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu 5 -pretrained_model bert_large -fine_tune -test -load_path LM_WN18RR_12_10_2023_15:55:43
+To test the model, set params test and load_path:
+
+```bash
+# for WN18RR
+## fine_tune
+python run.py -epoch 200 -name BERT_base_WN18RR_fine_tune -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base -fine_tune -test -load_path $checkpoint_name
+## frozen
+python run.py -epoch 200 -name BERT_base_WN18RR_frozen -batch 16 -test_batch 16 -num_workers 4 -data WN18RR -gpu $GPU_number -pretrained_model bert_base -test -load_path $checkpoint_name
+
+# for FB15k-237
+## fine_tune
+python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -fine_tune -test -load_path $checkpoint_name
+## frozen
+python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -test -load_path $checkpoint_name
 ```
 
-#### Partial Results on WN18RR
+<!-- #### Results (of WN18RR)
 
 | Methods | MRR | MR | Hits@1 | Hits@3 | Hits@10 |
 |--------------------------------------|----|-----|--------|--------|---------|
@@ -31,6 +64,4 @@ python run.py -epoch 200 -name LM_WN18RR_fine_tune -batch 16 -test_batch 16 -num
 | fine-tune BERT large (best val)      | 0.53316 |  | 0.48748| 0.55669 | 0.61256 |
 | fine-tune BERT large (test)           | 0.52994 |  | 0.48261 | 0.55871 | 0.61088 |
 |----------------------------------------|----|-----|--------|--------|---------|
-|                  | |  |  |  |  |
-
-
+|                  | |  |  |  |  | -->
