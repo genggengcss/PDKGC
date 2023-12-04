@@ -645,9 +645,20 @@ class DisenCSPROM(CapsuleBase):
 
         self.prompter = Prompter(self.plm_configs, self.p.embed_dim, self.p.prompt_length)
         self.llm_fc = nn.Linear(self.p.prompt_length * self.plm_configs.hidden_size, self.p.embed_dim)
+        self.unfreeze_layers = []
+        if self.p.unfreeze_layer >= 0:
+            self.unfreeze_layers.append('pooler.dense')
+            for layer in range(self.p.unfreeze_layer, self.plm.config.num_hidden_layers):
+                self.unfreeze_layers.append('layer.' + str(layer))
+            
         if self.p.prompt_length > 0:
-            for p in self.plm.parameters():
-                p.requires_grad = False
+            # for p in self.plm.parameters():
+            #     p.requires_grad = False
+            for name, param in self.plm.named_parameters():
+                param.requires_grad = False
+                for ele in self.unfreeze_layers:
+                    if ele in name:
+                        param.requires_grad = True
 
         self.loss_fn = get_loss_fn(params)
 

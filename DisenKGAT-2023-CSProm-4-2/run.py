@@ -601,6 +601,7 @@ if __name__ == '__main__':
     parser.add_argument('-load_type', type=str, default='')
     parser.add_argument('-load_path', type=str, default=None)
     parser.add_argument('-test', dest='test', action='store_true', help='test the model')
+    parser.add_argument('-unfreeze_layer', type=int, default=0)
     args = parser.parse_args()
 
     if args.load_path == None and args.load_epoch == 0 and args.load_type == '':
