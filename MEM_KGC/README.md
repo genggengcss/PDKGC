@@ -1,6 +1,6 @@
 ## Fine-tune & Frozen LM, BERT-base & BERT-large
 
-**fine-tune with default learning rates, i.e., bert_lr: 1e-5, model_lr: 5e-4 **
+**fine-tune with default learning rates, i.e., bert_lr: 1e-5, model_lr: 5e-4**
 
 **frozen with learning rate, i.e., model_lr: 5e-4 (can tune)**
 
