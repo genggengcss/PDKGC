@@ -38,7 +38,7 @@ python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch
 python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -load_epoch $epoch -load_path $checkpoint_name
 ```
 
-To test the model, set params test and load_path:
+To test the model, set params `test` and load_path:
 
 ```bash
 # for WN18RR
