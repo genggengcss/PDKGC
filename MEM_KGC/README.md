@@ -6,7 +6,7 @@
 
 #### Running commands
 
-To train the model, please specify which PLMs used for the training. Taking BERT-base as an example:
+To train the model, please specify the PLMs used for training at first. Taking BERT-base as an example:
 
 ```bash
 # for WN18RR
