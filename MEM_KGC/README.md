@@ -54,6 +54,10 @@ python run.py -epoch 80 -name BERT_base_FB15k237_fine_tune -batch 16 -test_batch
 python run.py -epoch 80 -name BERT_base_FB15k237_frozen -batch 16 -test_batch 16 -num_workers 4 -gpu $GPU_number -pretrained_model bert_base -test -load_path $checkpoint_name
 ```
 
+- `$GPU_number` is the order number of one avalible GPU.
+- `$epoch` is the specific epoch where training stopped.
+- `$checkpoint_name` is the model name you give at parameter `name`, followed by the start time of first training.
+
 #### Partial Results on WN18RR
 
 | Methods | MRR | MR | Hits@1 | Hits@3 | Hits@10 |
